@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link href="../css-common/shapes.css" rel="stylesheet">
+    <link href="../css-common/bootstrap.min.css" rel="stylesheet" type="text/css">
+
+    <script src="../js-common/jquery-2.1.4.min.js"></script>
+    <script src="../js-common/bootstrap.min.js"></script>
+
+    <!--    for SVD and matrix operations-->
+    <script src="js/numeric-1.2.6.min.js"></script>
+    
+    <!--    for symbolic mathematic opertions-->
+    <script src="js/nerdamer/nerdamer.core.js"></script>
+    <script src="js/nerdamer/Algebra.js"></script>
+    <script src="js/nerdamer/Calculus.js"></script>
+    <script src="js/nerdamer/Solve.js"></script>
+    
+    <!-- Load the Paper.js library -->
+    <script type="text/javascript" src="/js-common/paper.js"></script>
+	
+    <!-- Define inlined PaperScript associate it with myCanvas -->
+	<script type="text/paperscript" src="js/partitioning.js" canvas="myCanvas">
+	</script>
+</head>
+<body>
+    
+     <div class="container">
+          <div class="row">
+              <h2>Genetic Algorithm Solution for Polygon Decomposition</h2> <br>
+              <p>
+                  This web application shows available sub-polygon decomposition of a simple polygon. You will immediately see the result exactly on the polygon.                
+              </p>
+              
+              <p>
+                 This app is ultimately interactive. At first, it comes with default simple polygon. You can modify the polygon using hints at the bottom of the page.
+              </p>
+            <hr>
+            <div class="col-md-6">
+              	<canvas id="myCanvas" height="480" width="540"></canvas>
+                <hr>
+                <label>Draw:  </label> 
+                        <a onclick="createInitialPolygon(1)">polygon1</a>   |  
+                        <a onclick="createInitialPolygon(2)">polygon2</a>   |  
+                        <a onclick="createInitialPolygon(3)">polygon3</a>
+                <hr>
+                <label> Some hints for modifying the polygon </label>
+                 <ul>
+                    <li>
+                        You can drag the points or line segments
+                    </li>
+                    <li>
+                        You can add new points by clicking while holding CTRL
+                    </li>
+                </ul>
+                
+            </div>
+            <div class="col-md-6">
+                  <h3>Available settings</h3><hr>
+                    <label>Obtain...</label>
+                    <div class="row">
+                         <div class="col-md-6"> 
+                            <input  class="well-shaped-rectangles" type="checkbox" data-off-text="False" data-on-text="False" checked="False">
+                            <label> well-shaped rectangles</label>
+                             <br>
+                            <input  class="well-filled-circles" type="checkbox">
+                            <label> good circle-filled sub-polygons</label>
+                        </div>
+                        <div class="col-md-6">
+                            <input  class="good-aspect-ratio" type="checkbox">
+                            <label> good aspect ratio</label>  
+                            <br>
+                            <input  class="convexity" type="checkbox">
+                            <label> more convex polygons</label>
+                        </div>
+
+                    </div>
+                    <hr>
+
+                        
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label>Parcel distribution:</label>
+                        </div> 
+                        <div class="col-md-7">
+                                <input type="text" name="txt" onchange="window.readDistAndNormalize()" class="form-control" id="dist" value="50,50">                            
+                        </div>
+                        <div class="col-md-2">
+                               <button type="button" id="run" class="btn btn-warning" onclick="iterate()">Iterate</button>
+                        </div>
+                  </div>
+                             
+                  <br><br>
+                  <h3>Best Item Statistics</h3> <hr>
+
+                  <div class="row">
+                      <div class="col-md-6">
+                          <b><u>General:</u></b><br><br>
+                            <p id="info_iter">Iteration no:  0</p>
+                            <p id="info_fitness">Fitness value: 0</p>
+                      </div>
+                      <div class="col-md-6">
+                            <b><u>Area Statistics:</u></b><br><br>
+                            <p id="info_area">Area consistency: 0</p>
+                      </div>
+                  </div>
+                  <br>
+              </div>
+        </div>     
+    <hr>
+    </div>
+    
+    <footer class="footer">
+      <div class="container">
+        <p class="text-muted">This app is developed by 
+            <a href="http://www.ceng.metu.edu.tr/~akifakkus/doku.php"  target="_blank">Mehmet Akif AKKUS</a> using paper.js, nerdamer.js and numeric.js
+        </p>
+      </div>
+    </footer>
+</body>
+</html>
