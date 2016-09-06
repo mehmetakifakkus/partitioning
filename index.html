@@ -25,8 +25,10 @@
 </head>
 <body>
     
-     <div class="container">
+ <div class="container">
+         
           <div class="row">
+                
               <h2>Genetic Algorithm Solution for Polygon Decomposition</h2> <br>
               <p>
                   This web application shows available sub-polygon decomposition of a simple polygon. You will immediately see the result exactly on the polygon.                
@@ -37,12 +39,14 @@
               </p>
             <hr>
             <div class="col-md-6">
-              	<canvas id="myCanvas" height="480" width="540"></canvas>
+              	<canvas id="myCanvas" height="500" width="500"></canvas>
                 <hr>
-                <label>Draw:  </label> 
-                        <a onclick="createInitialPolygon(1)">polygon1</a>   |  
-                        <a onclick="createInitialPolygon(2)">polygon2</a>   |  
-                        <a onclick="createInitialPolygon(3)">polygon3</a>
+                <label>Draw another polygon: </label>
+                        <button type="button" class="btn btn-link" onclick="createInitialPolygon(1)">1</button>|  
+                        <button type="button" class="btn btn-link" onclick="createInitialPolygon(2)">2</button>|  
+                        <button type="button" class="btn btn-link" onclick="createInitialPolygon(3)">3</button>|
+                        <button type="button" class="btn btn-link" onclick="createInitialPolygon(4)">4</button>
+
                 <hr>
                 <label> Some hints for modifying the polygon </label>
                  <ul>
@@ -60,14 +64,14 @@
                     <label>Obtain...</label>
                     <div class="row">
                          <div class="col-md-6"> 
-                            <input  class="well-shaped-rectangles" type="checkbox" data-off-text="False" data-on-text="False" checked="False">
+                            <input  class="well-shaped-rectangles" type="checkbox" data-off-text="False" data-on-text="False" checked="True">
                             <label> well-shaped rectangles</label>
                              <br>
-                            <input  class="well-filled-circles" type="checkbox">
-                            <label> good circle-filled sub-polygons</label>
+                            <input  class="well-filled-circles" type="checkbox" checked="True">
+                            <label> good circle-filled polygons</label>
                         </div>
                         <div class="col-md-6">
-                            <input  class="good-aspect-ratio" type="checkbox">
+                            <input  class="good-aspect-ratio" type="checkbox"  checked="True">
                             <label> good aspect ratio</label>  
                             <br>
                             <input  class="convexity" type="checkbox">
@@ -75,19 +79,26 @@
                         </div>
 
                     </div>
-                    <hr>
-
-                        
+                    <hr>                      
                     <div class="row">
                         <div class="col-md-3">
                             <label>Parcel distribution:</label>
                         </div> 
                         <div class="col-md-7">
-                                <input type="text" name="txt" onchange="window.readDistAndNormalize()" class="form-control" id="dist" value="50,50">                            
+                                <input type="text" name="txt" onchange="window.readDistAndNormalize()" class="form-control" id="dist" value="50,30,10,10">                            
+
+                                <label>Try another:</label> 
+                                <button type="button" class="btn btn-link" onclick="loadDistribution(1)">1</button>|
+                                <button type="button" class="btn btn-link" onclick="loadDistribution(2)">2</button>|
+                                <button type="button" class="btn btn-link" onclick="loadDistribution(3)">3</button>|
+                                <button type="button" class="btn btn-link" onclick="loadDistribution(4)">4</button>
+                                <button type="button" class="btn btn-link" onclick="loadDistribution(5)">5</button>
+
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                                <button type="button" id="run" class="btn btn-warning" onclick="iterate()">Iterate</button>
                         </div>
+
                   </div>
                              
                   <br><br>
@@ -100,16 +111,21 @@
                             <p id="info_fitness">Fitness value: 0</p>
                       </div>
                       <div class="col-md-6">
-                            <b><u>Area Statistics:</u></b><br><br>
+                            <b><u>Consistency Statistics:</u></b><br><br>
                             <p id="info_area">Area consistency: 0</p>
+                            <p id="info_ratio">Aspect ratio consistency: 0</p>
+                            <p id="info_rect">Rectanglity consistency: 0</p>
+
                       </div>
+                      
                   </div>
                   <br>
               </div>
+              
         </div>     
     <hr>
     </div>
-    
+     
     <footer class="footer">
       <div class="container">
         <p class="text-muted">This app is developed by 
