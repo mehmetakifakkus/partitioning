@@ -1,7 +1,7 @@
 var colors = ['#888888', '#AB0902', '#104C90', 'magenta', 'red', 'blue', 'yellow', 'purple', 'green', 'black'];
 var drawables = [];
 var myPath = [];
-pools = [];
+var pools = [];
 var dist = [];
 
 ///////////////////////////////     event handling  ///////////////////////////////////
@@ -87,8 +87,6 @@ function PolygonPoint(p){
     
     this.id = PolygonPoint.counter++; // newly created vertex will have different id
     this.point = p;
-    this.type = 1;
-    this.dist = 0; // this distance value used for distance to any point
     
     this.draw = function(){
         drawables.push(new PointText({ point: p + [5, -5], fontSize: '16px', fillColor: 'black', content: ' '+ this.id}));  
@@ -102,6 +100,7 @@ function Line(angle, p, fitness){
     this.center = p;
     this.fitnessValue = fitness || 0;  
     this.done = 0; // stop turning 90 degrees
+    this.movingDir = 0; // -1 for to center, +1 going far
 };
 
 
@@ -193,7 +192,7 @@ drawCoordinateSystem();
 
 ////////////////////////////////////////    Main   //////////////////////////////////
 
-createInitialPolygon(1); // first create polygon, then modify by dragging
+createInitialPolygon(2); // first create polygon, then modify by dragging
 refreshPoints();
 
 ///////////////////////////////   vector processes   /////////////////////////////////
@@ -373,8 +372,17 @@ function createSide(angle, p, dir){
 }
 
 function createSides(path, line){
-    refreshPoints(); 
     
+    var linePath = new Path.Line({name: 'line', from: line.center - [1499, 0], to: line.center + [1499, 0]}); 
+    linePath.rotate(-line.angle, line.center); // merkez etrafinda donus yap (-angle because coordinate system differs)
+    var dd = linePath.intersect(path);
+    dd.style = {strokeColor:'black', strokeWidth:2, opacity: 0.4};    
+    
+    if(typeof dd.children[0] == 'undefined')
+        return null;
+    
+    refreshPoints(); 
+        
     var side = createSide(line.angle, line.center, 1)
     var int1 = side.intersect(path);
     int1.style = {name: 'intersect', opacity:0.5}
@@ -382,16 +390,8 @@ function createSides(path, line){
     var side2 = createSide(line.angle, line.center, 0)
     var int2 = side2.intersect(path);
     int2.style = {name: 'intersect', opacity:0.5}
-
-    var linePath = new Path.Line({name: 'line', from: line.center - [1499, 0], to: line.center + [1499, 0]}); 
-    linePath.rotate(-line.angle, line.center); // merkez etrafinda donus yap (-angle because coordinate system differs)
-    dd = linePath.intersect(path);
-    dd.style = {strokeColor:'black', strokeWidth:2, opacity: 0.4};
     
-    //console.log(dd)
-    //line.center = new Point(getPolygonCenter(dd.children[0])); // set the center intersection center
-    if(dd.children.line)
-        line.center = new Point(getPolygonCenter(dd.children.line)); // set the center intersection center
+    line.center = new Point(getPolygonCenter(dd.children[0])); // set the center intersection center
     
     drawables.push(int1, int2, linePath, dd)
     return [int1, int2, dd];
@@ -403,7 +403,6 @@ function createSides(path, line){
 function aspectRatio(polygon){
 
     var data = getDataFromPath(polygon), N = data.length;
-    
     var center = [numeric.sum(getCol(data, 0))/N, numeric.sum(getCol(data, 1))/N];
     var data_m = numeric.rep([N,2], 0); // create a matrix with value 0
     
@@ -472,21 +471,37 @@ function GenePool(p, d){
     
     var tempObj = this;
     
-    this.curLine = 0 // it is unnecessary for the try out purposes
-    
     this.divide = function (){
 
         var sides = createSides(tempObj.path, tempObj.lines[0]); // arbitrary starting line
+        console.log('start center: '+ tempObj.lines[0].center)
 
         for(var j=0; j<10; j++, tempObj.t++)
         {    
             document.getElementById("info_iter").innerHTML = "Iteration no:  "+tempObj.id+" - "+tempObj.t;
 
-            var line = tempObj.lines[getRandomInt(2, tempObj.lines.length)];
-            tempObj.curLine = line;
-               
-            mutation(line, new Point(getPolygonCenter(sides[0])));
-            sides = createSides(tempObj.path, line); 
+            var selected = getRandomInt(2, tempObj.lines.length);
+            var line = tempObj.lines[selected];
+   
+            //if(sides == null)
+              //  debugger
+            
+            line.movingDir = sides[0].area / tempObj.path.area - tempObj.dist[0] < 0 ? 1 : -1; // 
+   
+            mutation(line, new Point(getPolygonCenter(sides[0])), tempObj.path);
+            sides = createSides(tempObj.path, line);
+            
+            if(sides == null) // 2'ye bolme isleminde sikinti var
+            {
+                console.log('----- problem var -------')
+                tempObj.lines.splice(selected,1); // eliminate this one and put best
+                tempObj.lines.push(new Line(tempObj.lines[0].angle, tempObj.lines[0].center, tempObj.lines[0].fitnessValue));
+                sides = createSides(tempObj.path, tempObj.lines[0]); // arbitrary starting line
+                if(sides == null)
+                    debugger
+                    
+                continue;
+            }
 
             line.fitnessValue = fitnessFunction(sides, tempObj.dist[0]);
     
@@ -497,7 +512,7 @@ function GenePool(p, d){
             tempObj.lines.push(new Line(tempObj.lines[1].angle, tempObj.lines[1].center, tempObj.lines[1].fitnessValue));
         }
         document.getElementById("info_fitness").innerHTML = "Fitness value:  "+tempObj.lines[0].fitnessValue.toFixed(4);
-        var sides = createSides(tempObj.path, tempObj.lines[0]);
+        sides = createSides(tempObj.path, tempObj.lines[0]);
         
         if(tempObj.bestSides)
         {
@@ -510,13 +525,13 @@ function GenePool(p, d){
       
         window.show();
 
-        if (tempObj.lines[0].fitnessValue < 0.999 && tempObj.t < 400) 
+        if (tempObj.lines[0].fitnessValue < 0.999 && tempObj.t < 200) 
             window.setTimeout(tempObj.divide, 0);  
         
         return tempObj.t;
     }
     
-    this.changeLinePool = function(part){
+    this.changeLinePool = function(part){ // bir onceki line ayni kalmis ise tekrar pool olusturma
                 
         var part2 = tempObj.path.exclude(part)
         if(tempObj.path.area - (part.area + part2.area) < 10) 
@@ -534,16 +549,14 @@ function GenePool(p, d){
     }
 };
 
-
-//////////////////////////////    Genetic Algorithm   ///////////////////////////////////
-
 function fitnessFunction(sides, dist){ // distribution
 
-    //var sides = createSides(path, line); 
-
     var total = areaPenalty = aspectRatioPenalty = concavityPenalty = rectanglityPenalty = 0
-    var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25, circleFillWeight = 0.2;
+    var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25;
 
+    if(typeof sides[0]  == 'undefined')
+        debugger
+    
     if(sides[0].className == "CompoundPath") 
         return 0;
     
@@ -576,36 +589,54 @@ function fitnessFunction(sides, dist){ // distribution
         total +=concavityPenalty;
     }
     
-    if($('.well-filled-circles:checked').val()){
+    if($('.well-filled-circles:checked').val()){    
         var result = miniDisc(sides[0]);
-        result.areaPenalty = circleFillWeight * result.areaPenalty;
-        console.log("Circle Area Penalty: "+result.areaPenalty);
+        result.areaPenalty = 0.3 * result.areaPenalty;
+        //console.log("Circle Area Penalty: "+result.areaPenalty);
         total+=result.areaPenalty;
     }
     return 1 - (areaPenalty + total);
 }
 
-function mutation(line, center){
+function mutation(line, center, path){
     if(line.fitnessValue > 0.98)
         line.done = 1;
         
     var rand = Math.random();
-    var coef = (1 - line.fitnessValue) * 5;
+    var coef = Math.pow(Math.abs(1 - line.fitnessValue) * 5, 2);
     if(rand < 0.6) // rotate seperating line
     {
         var randAngle = getRandomFloat(-9, 10) * coef;
         line.angle += randAngle;
+        console.info('rotate - center: '+ line.center +', angle: '+randAngle.toFixed(2))
+
     }
     else if(rand < 0.95) // move seperating line 
     {
-        var movingDir = new Point(coef * getRandomFloat(1, 10), 0); // dummy vector
-        
-        if(getRandomInt(0, 2))
-            movingDir.angle = line.angle + 90; // set this unit vector as line angle
-        else
-            movingDir.angle = line.angle - 90; // set this unit vector as line angle
+        line.center = new Point(getPolygonCenter(path)); // set the center intersection center
 
-        line.center += movingDir;            
+        var linePath = new Path.Line({name: 'line', from: line.center - [1499, 0], to: line.center + [1499, 0]}); 
+        linePath.rotate(line.angle+90, line.center); // merkez etrafinda donus yap (-angle because coordinate system differs)
+        var dd = linePath.intersect(path);
+        
+        //debugger
+        var lineSeg = dd.children[0];
+        
+        if(typeof lineSeg == 'undefined')
+            debugger
+        
+        if(typeof lineSeg.segments == 'undefined')
+            debugger
+        var p1 = lineSeg.segments[0].point;
+        var p2 = lineSeg.segments[1].point;
+        var dist = p1.getDistance(p2);        
+        console.log(dist)
+ 
+        var movingDir = (line.center - center).normalize(coef * getRandomFloat(1, 10)) * line.movingDir;
+        
+        console.info('move - center: '+ line.center +', dir: '+movingDir);
+
+        line.center += movingDir;          
     }
     else // %5 percentage change the direction 90 degree
     {
