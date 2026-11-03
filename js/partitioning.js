@@ -495,6 +495,7 @@ function GenePool(p, d){
     this.dist = d;
     this.lines = [];
     this.t = 0;
+    this.gen = null;
     this.bestSides = 0;
 
     var self = this;
@@ -513,14 +514,19 @@ function GenePool(p, d){
         self.dist = dist;
         self.lines = [];
         self.t = 0;
+        self.gen = null;
     }
 
     function evaluate(line){ // solve the offset exactly for the area ratio, then score the shape
         line.offset = findCutOffset(self.path, line.angle, self.dist[0]);
         var sides = cutPath(self.path, line);
-        line.fitnessValue = fitnessFunction(sides, self.dist[0], self.path);
+        line.fitnessValue = fitnessFunction(sides, self.dist[0], self.path, isLastPool());
         sides[0].remove();
         sides[1].remove();
+    }
+
+    function isLastPool(){ // the last pool's remainder is not cut again, so its shape counts too
+        return pools.indexOf(self) == pools.length - 1;
     }
 
     function sortLines(){
@@ -541,47 +547,137 @@ function GenePool(p, d){
         var best = self.lines[0];
         self.removeBest();
         self.bestSides = cutPath(self.path, best);
-        fitnessFunction(self.bestSides, self.dist[0], self.path); // refresh the statistics for the best item
+        fitnessFunction(self.bestSides, self.dist[0], self.path, isLastPool()); // refresh the statistics for the best item
         document.getElementById("info_fitness").innerHTML = "Fitness value:  " + best.fitnessValue.toFixed(4);
     }
 
-    this.divide = function(onDone){
-        if(self.lines.length == 0)
-            initPopulation();
+    // One generation = tournament -> mutation -> evaluation -> replacement.
+    // runPhase() performs the next phase and returns the generation's state, so the
+    // simulation can stop after each phase while the fast mode just runs them back to back.
+    function runPhase(){
+        var g = self.gen;
 
-        for(var j=0; j < PER_TICK && self.t < GENERATIONS; j++, self.t++){
-            document.getElementById("info_iter").innerHTML = "Iteration no:  " + (pools.indexOf(self) + 1) + " - " + (self.t + 1);
-
-            // tournament selection
-            var a = self.lines[getRandomInt(0, self.lines.length)], b = self.lines[getRandomInt(0, self.lines.length)];
-            var child = new Line(a.fitnessValue >= b.fitnessValue ? a.angle : b.angle);
-            mutation(child);
-            evaluate(child);
-
-            if(child.fitnessValue > self.lines[self.lines.length - 1].fitnessValue){ // replace the worst
-                self.lines[self.lines.length - 1] = child;
+        if(!g || g.phase == 'replacement'){     // tournament selection
+            g = self.gen = {t: self.t + 1};
+            g.a = self.lines[getRandomInt(0, self.lines.length)];
+            g.b = self.lines[getRandomInt(0, self.lines.length)];
+            g.parent = g.a.fitnessValue >= g.b.fitnessValue ? g.a : g.b;
+            g.phase = 'tournament';
+            document.getElementById("info_iter").innerHTML = "Iteration no:  " + (pools.indexOf(self) + 1) + " - " + g.t;
+        }
+        else if(g.phase == 'tournament'){       // mutation
+            g.child = new Line(g.parent.angle);
+            g.mutation = mutation(g.child);
+            g.child.offset = findCutOffset(self.path, g.child.angle, self.dist[0]);
+            g.phase = 'mutation';
+        }
+        else if(g.phase == 'mutation'){         // evaluation
+            evaluate(g.child);
+            g.phase = 'evaluation';
+        }
+        else if(g.phase == 'evaluation'){       // the child replaces the worst individual if it is better
+            g.worst = self.lines[self.lines.length - 1];
+            g.accepted = g.child.fitnessValue > g.worst.fitnessValue;
+            if(g.accepted){
+                self.lines[self.lines.length - 1] = g.child;
                 sortLines();
             }
+            self.t++;
+            g.phase = 'replacement';
         }
+        return g;
+    }
+
+    function atGenerationEnd(){
+        return !self.gen || self.gen.phase == 'replacement';
+    }
+
+    function finished(){
+        return atGenerationEnd() && (self.t >= GENERATIONS || self.lines[0].fitnessValue >= 0.9999);
+    }
+
+    function finish(){
+        self.gen = null;
+        updateBest();
+        window.show();
+        drawSimulation(null);
+        if(self.onDone)
+            self.onDone();
+    }
+
+    function tick(){
+        if(sim.enabled){                        // one phase per frame
+            var g = runPhase();
+            if(g.phase == 'replacement')
+                updateBest();
+            window.show();
+            drawSimulation(self, g);
+            simSchedule(finished() ? finish : tick);
+            return;
+        }
+
+        while(!atGenerationEnd())               // complete a generation left over by the simulation
+            runPhase();
+        for(var j=0; j < PER_TICK && !finished(); j++)
+            do { runPhase(); } while(!atGenerationEnd());
 
         updateBest();
         window.show();
 
-        if(self.t < GENERATIONS && self.lines[0].fitnessValue < 0.9999)
-            window.setTimeout(function(){ self.divide(onDone); }, 0);
-        else if(onDone)
-            onDone();
+        if(finished())
+            finish();
+        else
+            window.setTimeout(tick, 0);
+    }
+
+    this.divide = function(onDone){
+        self.onDone = onDone;
+        if(self.lines.length == 0){
+            initPopulation();
+            updateBest();
+            if(sim.enabled){
+                window.show();
+                drawSimulation(self, {phase: 'init', t: 0});
+                simSchedule(tick);
+                return;
+            }
+        }
+        tick();
     }
 };
 
-function fitnessFunction(sides, dist, path){ // distribution
+var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25, circleWeight = 0.3;
 
-    var total = areaPenalty = aspectRatioPenalty = concavityPenalty = rectanglityPenalty = 0
-    var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25;
+function shapePenalty(polygon, stats){ // weighted sum of the enabled shape objectives for one part
+    var total = 0;
+
+    if($('.good-aspect-ratio:checked').val()){
+        stats.ratio += ratioWeight * (aspectRatio(polygon) - 1);
+        total += ratioWeight * (aspectRatio(polygon) - 1);
+    }
+
+    var res = rectanglityandConcavity(polygon);
+
+    if($('.well-shaped-rectangles:checked').val()){
+        stats.rect += rectWeight * res.diff;
+        total += rectWeight * res.diff;
+    }
+
+    if($('.convexity:checked').val())
+        total += concavityWeight * res.concave; // number of concave points
+
+    if($('.well-filled-circles:checked').val())
+        total += circleWeight * miniDisc(polygon).areaPenalty;
+
+    return total;
+}
+
+// bothSides: score the shape of both parts (used by the last pool, whose remainder is a final part as well)
+function fitnessFunction(sides, dist, path, bothSides){
 
     if(typeof sides[0]  == 'undefined')
         debugger
-    
+
     if(sides[0].className == "CompoundPath" || sides[1].className == "CompoundPath") // cut produced several pieces
         return 0;
 
@@ -589,53 +685,275 @@ function fitnessFunction(sides, dist, path){ // distribution
     if(Math.abs(areaA + areaB - Math.abs(path.area)) > 0.005 * Math.abs(path.area)) // boolean operation failed
         return 0;
 
-    areaPenalty += Math.abs(areaA / (areaA + areaB) - dist);
-    
-    document.getElementById("info_area").innerHTML = "Area consistency: " + (1-areaPenalty).toFixed(6);
-    
-    areaPenalty = areaWeight * areaPenalty;
-    //console.log("Area Penalty: "+areaPenalty.toFixed(6));
-        
-    if($('.good-aspect-ratio:checked').val()){
-        aspectRatioPenalty = ratioWeight*(aspectRatio(sides[0]) - 1);
-        document.getElementById("info_ratio").innerHTML = "Aspect ratio consistency: "+ (1-aspectRatioPenalty).toFixed(6);
-        //console.log("Aspect ratio penalty: "+aspectRatioPenalty.toFixed(3));
-        total += aspectRatioPenalty;
-    }
-    
-    var res = rectanglityandConcavity(sides[0]);
-    
-    if($('.well-shaped-rectangles:checked').val()){
-        rectanglityPenalty = rectWeight * (res.diff);
-        //console.log("Rectanglity penalty: "+rectanglityPenalty.toFixed(3));
-        document.getElementById("info_rect").innerHTML = "Rectanglity consistency: "+ (1-rectanglityPenalty).toFixed(6);
-        total += rectanglityPenalty;
-    }
+    var areaPenalty = areaWeight * Math.abs(areaA / (areaA + areaB) - dist);
 
-    if($('.convexity:checked').val()){    
-        concavityPenalty = concavityWeight*(res.concave); //number of concave points
-        //console.log("Concavity penalty: "+concavityPenalty.toFixed(3));
-        total +=concavityPenalty;
+    var stats = {ratio: 0, rect: 0};
+    var total = shapePenalty(sides[0], stats), count = 1;
+    if(bothSides){
+        total += shapePenalty(sides[1], stats);
+        count = 2;
     }
-    
-    if($('.well-filled-circles:checked').val()){    
-        var result = miniDisc(sides[0]);
-        result.areaPenalty = 0.3 * result.areaPenalty;
-        //console.log("Circle Area Penalty: "+result.areaPenalty);
-        total+=result.areaPenalty;
-    }
+    total /= count;
+
+    document.getElementById("info_area").innerHTML = "Area consistency: " + (1 - areaPenalty).toFixed(6);
+    if($('.good-aspect-ratio:checked').val())
+        document.getElementById("info_ratio").innerHTML = "Aspect ratio consistency: " + (1 - stats.ratio / count).toFixed(6);
+    if($('.well-shaped-rectangles:checked').val())
+        document.getElementById("info_rect").innerHTML = "Rectanglity consistency: " + (1 - stats.rect / count).toFixed(6);
+
     return 1 - (areaPenalty + total);
 }
 
 function mutation(line){
-    var rand = Math.random();
-    if(rand < 0.6)       // fine rotation of the separating line
+    var rand = Math.random(), kind;
+    if(rand < 0.6){       // fine rotation of the separating line
         line.angle += getRandomFloat(-5, 5);
-    else if(rand < 0.9)  // coarse rotation
+        kind = 'fine';
+    }
+    else if(rand < 0.9){  // coarse rotation
         line.angle += getRandomFloat(-45, 45);
-    else                 // jump by 90, 180 or 270 degrees (180 swaps the two sides)
+        kind = 'coarse';
+    }
+    else{                 // jump by 90, 180 or 270 degrees (180 swaps the two sides)
         line.angle += 90 * getRandomInt(1, 4);
+        kind = 'jump';
+    }
     line.angle = ((line.angle % 360) + 360) % 360;
+    return kind;
+}
+
+
+////////////////////////////   GA simulation  ////////////////////////////////////////
+
+var sim = {enabled: false, playing: true, delay: 700, timer: null, next: null};
+
+function simSchedule(fn){ // run fn after the frame delay, or when Step / Play is pressed
+    sim.next = fn;
+    if(sim.playing)
+        sim.timer = window.setTimeout(simAdvance, sim.delay);
+}
+
+function simAdvance(){
+    window.clearTimeout(sim.timer);
+    sim.timer = null;
+    var fn = sim.next;
+    sim.next = null;
+    if(fn)
+        fn();
+}
+
+window.simToggle = function(){
+    sim.enabled = document.getElementById("simulate").checked;
+    document.getElementById("sim_panel").style.display = sim.enabled ? 'block' : 'none';
+    if(!sim.enabled && sim.next) // continue the running pool in fast mode
+        simAdvance();
+}
+
+window.simPlayPause = function(){
+    sim.playing = !sim.playing;
+    document.getElementById("sim_play").innerHTML = sim.playing ? 'Pause' : 'Play';
+    if(sim.playing && sim.next)
+        simAdvance();
+    else
+        window.clearTimeout(sim.timer);
+}
+
+window.simStep = function(){
+    if(sim.playing)
+        window.simPlayPause();
+    if(sim.next)
+        simAdvance();
+    else if(!running)
+        window.iterate();
+}
+
+window.simSpeed = function(value){ // slider 0..100 -> 2000..50 ms per frame
+    sim.delay = Math.round(2000 - 19.5 * value);
+}
+
+function drawCutLine(path, line, style){ // the cut line clipped to the polygon
+    var nn = lineNormal(line.angle), n = new Point(nn[0], nn[1]), d = new Point(nn[1], -nn[0]);
+    var c = path.bounds.center, L = path.bounds.width + path.bounds.height;
+    var p = c - n * (n.dot(c) - line.offset);
+    var from = p - d * L, to = p + d * L;
+    var xs = path.getIntersections(new Path.Line({from: from, to: to, insert: false}));
+    if(xs.length >= 2){
+        xs.sort(function(a, b) {return d.dot(a.point) - d.dot(b.point);});
+        from = xs[0].point;
+        to = xs[xs.length - 1].point;
+    }
+    var l = new Path.Line({from: from, to: to});
+    l.style = style;
+    drawables.push(l);
+    return l;
+}
+
+var SIM_COLORS = {contender: '#f0ad4e', parent: '#e8590c', child: '#1c7ed6', accepted: '#2f9e44', rejected: '#e03131'};
+var SIM_PHASES = ['tournament', 'mutation', 'evaluation', 'replacement'];
+var SIM_CHIPS = {tournament: '1 Tournament', mutation: '2 Mutation', evaluation: '3 Evaluation', replacement: '4 Replacement'};
+var SIM_TITLES = {init: 'Initial population', tournament: '1. Tournament selection', mutation: '2. Mutation', evaluation: '3. Evaluation', replacement: '4. Replacement'};
+var MUTATION_TEXT = {fine: 'Fine rotation (±5°)', coarse: 'Coarse rotation (±45°)', jump: 'Jump by 90° / 180° / 270°'};
+
+function fmtAngle(a){ return a.toFixed(1) + '°'; }
+function fmtFit(f){ return f.toFixed(4); }
+
+function simExplanation(pool, g){
+    var lines = pool.lines;
+    if(g.phase == 'init')
+        return 'Ten cut angles are created around the principal axis of the polygon. For every angle the cut offset is solved exactly, so the first part always gets ' + (100 * pool.dist[0]).toFixed(1) + '% of the area. Fitness only scores the shape of the parts.';
+    if(g.phase == 'tournament')
+        return 'Two random individuals compete: ' + fmtAngle(g.a.angle) + ' (' + fmtFit(g.a.fitnessValue) + ') vs ' + fmtAngle(g.b.angle) + ' (' + fmtFit(g.b.fitnessValue) + '). The fitter one becomes the parent.';
+    if(g.phase == 'mutation')
+        return MUTATION_TEXT[g.mutation] + ': the parent angle ' + fmtAngle(g.parent.angle) + ' becomes ' + fmtAngle(g.child.angle) + '. The cut is moved so that the area ratio stays exact.';
+    if(g.phase == 'evaluation')
+        return 'The child cut is scored: fitness = 1 − shape penalties = ' + fmtFit(g.child.fitnessValue) + '. The worst individual has ' + fmtFit(lines[lines.length - 1].fitnessValue) + '.';
+    if(g.accepted)
+        return 'The child (' + fmtFit(g.child.fitnessValue) + ') is better than the worst individual (' + fmtFit(g.worst.fitnessValue) + ' at ' + fmtAngle(g.worst.angle) + '), so it replaces it.';
+    return 'The child (' + fmtFit(g.child.fitnessValue) + ') is not better than the worst individual (' + fmtFit(g.worst.fitnessValue) + '), so it is discarded.';
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+    var words = text.split(' '), line = '';
+    for(var w=0; w < words.length; w++){
+        var test = line ? line + ' ' + words[w] : words[w];
+        if(ctx.measureText(test).width > maxWidth && line){
+            ctx.fillText(line, x, y);
+            line = words[w];
+            y += lineHeight;
+        }
+        else
+            line = test;
+    }
+    ctx.fillText(line, x, y);
+}
+
+function drawGeneRow(ctx, y, label, line, background, status){
+    var W = ctx.canvas.width;
+    if(background){
+        ctx.fillStyle = background;
+        ctx.fillRect(0, y - 14, W, 26);
+    }
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.fillText(label, 6, y + 4);
+
+    // compass needle showing the gene (cut direction)
+    var cx = 62, r = 10, rad = line.angle * Math.PI / 180;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - r * Math.cos(rad), y - r * Math.sin(rad)); ctx.lineTo(cx + r * Math.cos(rad), y + r * Math.sin(rad)); ctx.stroke();
+
+    ctx.fillStyle = '#333';
+    ctx.fillText(fmtAngle(line.angle), 82, y + 4);
+
+    // fitness bar
+    var bx = 150, bw = W - bx - 130;
+    ctx.fillStyle = '#e9ecef';
+    ctx.fillRect(bx, y - 7, bw, 14);
+    if(status != 'unscored'){
+        ctx.fillStyle = '#495057';
+        ctx.fillRect(bx, y - 7, bw * Math.max(0, Math.min(1, line.fitnessValue)), 14);
+        ctx.fillStyle = '#333';
+        ctx.fillText(fmtFit(line.fitnessValue), bx + bw + 8, y + 4);
+    }
+    if(status && status != 'unscored'){
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(status, bx + bw + 62, y + 4);
+    }
+}
+
+function drawSimulation(pool, g){
+    var canvas = document.getElementById("simCanvas"), ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if(!pool || !sim.enabled)
+        return;
+
+    // ----- main canvas: every individual's cut, with the ones in play highlighted
+    var path = pool.path;
+    for(var k=0; k < pool.lines.length; k++)
+        drawCutLine(path, pool.lines[k], {strokeColor: 'black', strokeWidth: 1, opacity: 0.3});
+
+    if(g.phase == 'tournament'){
+        drawCutLine(path, g.a, {strokeColor: SIM_COLORS.contender, strokeWidth: 3});
+        drawCutLine(path, g.b, {strokeColor: SIM_COLORS.contender, strokeWidth: 3});
+        drawCutLine(path, g.parent, {strokeColor: SIM_COLORS.parent, strokeWidth: 4});
+    }
+    else if(g.phase == 'mutation'){
+        drawCutLine(path, g.parent, {strokeColor: SIM_COLORS.parent, strokeWidth: 2, dashArray: [6, 4]});
+        drawCutLine(path, g.child, {strokeColor: SIM_COLORS.child, strokeWidth: 4});
+    }
+    else if(g.phase == 'evaluation'){
+        var sides = cutPath(path, g.child);
+        sides[0].style = {fillColor: SIM_COLORS.child, opacity: 0.35};
+        sides[1].remove();
+        drawables.push(sides[0]);
+        drawCutLine(path, g.child, {strokeColor: SIM_COLORS.child, strokeWidth: 4});
+    }
+    else if(g.phase == 'replacement'){
+        if(g.accepted)
+            drawCutLine(path, g.worst, {strokeColor: SIM_COLORS.rejected, strokeWidth: 2, dashArray: [6, 4]});
+        drawCutLine(path, g.child, {strokeColor: g.accepted ? SIM_COLORS.accepted : SIM_COLORS.rejected, strokeWidth: 4});
+    }
+
+    // ----- panel: header, phase chips, explanation
+    var W = canvas.width;
+    ctx.fillStyle = '#222';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('Pool ' + (pools.indexOf(pool) + 1) + ' / ' + pools.length + '   ·   Generation ' + g.t + ' / ' + GENERATIONS, 6, 20);
+
+    var chipW = (W - 12) / 4;
+    for(var c=0; c < SIM_PHASES.length; c++){
+        var active = SIM_PHASES[c] == g.phase;
+        ctx.fillStyle = active ? '#f0ad4e' : '#f1f3f5';
+        ctx.fillRect(6 + c * chipW, 32, chipW - 6, 24);
+        ctx.fillStyle = active ? '#fff' : '#868e96';
+        ctx.font = (active ? 'bold ' : '') + '12px sans-serif';
+        ctx.fillText(SIM_CHIPS[SIM_PHASES[c]], 12 + c * chipW, 48);
+    }
+
+    ctx.fillStyle = '#222';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(SIM_TITLES[g.phase], 6, 76);
+    ctx.font = '13px sans-serif';
+    wrapText(ctx, simExplanation(pool, g), 6, 94, W - 12, 17);
+
+    // ----- population, sorted by fitness
+    var y0 = 160;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = '#868e96';
+    ctx.fillText('Population (gene = cut angle), sorted by fitness', 6, y0 - 18);
+    for(var k=0; k < pool.lines.length; k++){
+        var line = pool.lines[k], bg = null, status = '';
+        if(g.phase == 'tournament' && (line == g.a || line == g.b))
+            bg = '#fff3bf';
+        if((g.phase == 'tournament' || g.phase == 'mutation') && line == g.parent){
+            bg = '#ffd8a8';
+            status = 'parent';
+        }
+        if(g.phase == 'evaluation' && k == pool.lines.length - 1)
+            status = 'worst';
+        if(g.phase == 'replacement' && g.accepted && line == g.child){
+            bg = '#d3f9d8';
+            status = 'new';
+        }
+        drawGeneRow(ctx, y0 + k * 26, '#' + (k + 1), line, bg, status);
+    }
+
+    // ----- the child being created
+    var yc = y0 + pool.lines.length * 26 + 14;
+    if(g.child){
+        var scored = g.phase == 'evaluation' || g.phase == 'replacement';
+        var bgc = g.phase == 'replacement' ? (g.accepted ? '#d3f9d8' : '#ffe3e3') : '#d0ebff';
+        drawGeneRow(ctx, yc, 'child', g.child, bgc, scored ? (g.phase == 'replacement' ? (g.accepted ? 'kept' : 'discarded') : '') : 'unscored');
+    }
+    if(g.phase == 'replacement' && g.accepted){
+        ctx.fillStyle = SIM_COLORS.rejected;
+        ctx.font = '12px sans-serif';
+        ctx.fillText('eliminated: ' + fmtAngle(g.worst.angle) + ' (' + fmtFit(g.worst.fitnessValue) + ')', 6, yc + 30);
+    }
 }
 
 
