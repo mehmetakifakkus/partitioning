@@ -1,9 +1,10 @@
 # Genetic Algorithm Solution for Polygon Decomposition
-<img float="left" src="https://github.com/mehmetakifakkus/jslab/blob/v2/app/public/images/partitioning-thumbnail.png" width="200"/>This web application shows available sub-polygon decomposition of a simple polygon. You will immediately see the result exactly on the polygon.
 
-This app is ultimately interactive. At first, it comes with default simple polygon. You can modify the polygon using hints at the bottom of the page.
+An interactive web app that splits a polygon into parts with the areas you ask for (for example `50,30,10,10`), using straight cuts chosen by a genetic algorithm. The result is drawn right on the polygon, each part in its own color with its area.
 
-You can [visit this page](https://mehmetakifakkus.github.io/partitioning/)
+Pick one of eight shapes or edit the polygon by dragging its points on the canvas, set the parcel distribution and the objectives in the *Partition* tab, and press *Iterate*. The *Simulation* tab shows the algorithm step by step, and *GA Settings* controls its speed and parameters. See [Usage](#usage) for details.
+
+**Try it: [mehmetakifakkus.github.io/partitioning](https://mehmetakifakkus.github.io/partitioning/)**
 
 ## Screenshots
 
