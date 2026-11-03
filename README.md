@@ -5,6 +5,12 @@ This app is ultimately interactive. At first, it comes with default simple polyg
 
 You can [visit this page](https://mehmetakifakkus.github.io/partitioning/)
 
+## Screenshots
+
+Taken from the live site: on a desktop (1548 × 850) and on a phone (360 px wide).
+
+<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height, with the Settings & Stats and GA Simulation tabs on the right" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width and the tabs are below it" width="180"/>
+
 
 ## Overview
 
@@ -26,10 +32,6 @@ The page has the polygon canvas on the left and two tabs on the right: **Setting
   - The polygon canvas draws every individual's cut, with the lines in play highlighted. The panel lists the population (gene = cut angle, shown as a compass needle) with fitness bars and explains each phase.
   - Unticking the box finishes the current run at full speed.
 
-![GA simulation: the child's cut (blue) is evaluated against the population](images/simulation.png)
-
-*The simulation in the evaluation phase: the child's cut (blue) gives the shaded part exactly 50 % of the area and is scored; the panel compares it with the population, sorted by fitness.*
-
 ## Project Structure
 
 | Path | Purpose |
@@ -41,7 +43,7 @@ The page has the polygon canvas on the left and two tabs on the right: **Setting
 | `js/numeric-1.2.6.min.js` | Covariance matrix and eigenvalue computations |
 | `js/nerdamer/` | Symbolic equation solving (circle through three points) |
 | `js/jquery-2.1.4.min.js`, `js/bootstrap.min.js`, `css/bootstrap.min.css` | UI framework (tabs, buttons) |
-| `images/` | Screenshots used in this README |
+| `images/` | Screenshots of the live site used in this README |
 
 ## Algorithm
 
