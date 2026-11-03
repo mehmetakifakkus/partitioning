@@ -19,6 +19,10 @@ The project is a static web page: there is no build step, package manager or ser
 - **Parcel distribution:** enter comma-separated weights (they are normalized automatically), or pick one of the presets `1`–`5`.
 - **Objectives:** checkboxes toggle the optional fitness terms (well-shaped rectangles, good circle-filled polygons, good aspect ratio, more convex polygons).
 - **Iterate:** runs the algorithm (keyboard: `0`; `1`–`9` re-runs a single pool). The *Best Item Statistics* panel shows the iteration number, the fitness value and the consistency scores of the best solution.
+- **GA Simulation:** tick *Simulate the genetic algorithm step by step* to watch every generation in four phases (tournament → mutation → evaluation → replacement).
+  - Use *Pause* / *Play* and *Step* to control it, and the slider to set the speed. *Step* also starts a run if none is active.
+  - The polygon canvas draws every individual's cut, with the lines in play highlighted. The panel lists the population (gene = cut angle, shown as a compass needle) with fitness bars and explains each phase.
+  - Unticking the box finishes the current run at full speed.
 
 ## Project Structure
 
@@ -48,10 +52,10 @@ All of the logic lives in `js/partitioning.js`.
 | 10% | Jump by 90°, 180° or 270° (180° swaps which side gets the target area) |
 
 ### Selection
-Steady-state GA: a parent is chosen by tournament selection, mutated and evaluated. The child replaces the worst individual if it is better. Each pool runs 200 evaluations, or stops early when fitness exceeds `0.9999`.
+Steady-state GA: each generation picks a parent by tournament selection, mutates and evaluates it (`runPhase`). The child replaces the worst individual if it is better. Each pool runs 200 evaluations, or stops early when fitness exceeds `0.9999`.
 
 ### Fitness (`fitnessFunction`)
-Fitness is `1 − Σ penalties`. A cut that splits the polygon into more than two pieces gets fitness 0.
+Fitness is `1 − Σ penalties`. A cut that splits the polygon into more than two pieces gets fitness 0. Shape penalties are computed for the part a pool cuts off; in the last pool, whose remainder is also a final part, they are averaged over both parts (`shapePenalty`).
 
 | Penalty | Weight | Description | Optional |
 |---|---|---|---|
@@ -66,7 +70,7 @@ The polygon is divided step by step. Each gene pool cuts the current polygon in 
 
 ## Known Limitations
 
-- The shape objectives are evaluated only on the part a pool cuts off, not on the remainder. The last part's shape is therefore not optimized directly.
+- Intermediate remainders are not scored for shape, since they are cut again. Cuts are greedy: an early cut cannot be revised to help a later one.
 - Weights are sorted in descending order before cutting (`normalize`), so the largest part is always cut first.
 - The code is a research prototype: it still contains `debugger` statements, verbose `console` logging and commented-out code (e.g. a *Stop* button).
 - There are no automated tests.
