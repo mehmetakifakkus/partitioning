@@ -1,5 +1,60 @@
-canvas { border: 2px solid black; }
-
 body {
-    padding-top: 15px;
+    margin: 0;
+    background: #fff;
+    color: #333;
 }
+
+#myCanvas { border: 2px solid black; display: block; }
+
+/* ----- header ----- */
+.app-header {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 10px 16px 4px;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+.app-header h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.about summary { cursor: pointer; color: #337ab7; }
+.about[open] { flex-basis: 100%; }
+.about p { margin: 6px 0 0; font-size: 13px; max-width: 900px; }
+
+/* ----- two-column layout: polygon left, tabs right ----- */
+.app {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 8px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+}
+.app-left { flex: 0 0 504px; max-width: 100%; }
+.app-right { flex: 1 1 400px; min-width: 0; }
+
+.polygon-presets { font-size: 13px; margin-top: 4px; }
+.polygon-presets .btn-link { padding: 2px 6px; }
+.hint { color: #868e96; font-size: 12px; }
+.polygon-presets .hint { margin-left: 8px; }
+
+/* ----- settings tab ----- */
+.tab-content { padding-top: 8px; }
+.tab-pane h4 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+.tab-pane .btn-link { padding: 2px 6px; }
+.dist-row { display: flex; gap: 8px; }
+.dist-row .form-control { flex: 1; }
+.objectives { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+.objectives label, .sim-toggle { font-weight: normal; margin: 0; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; font-size: 13px; }
+.stats p { margin: 0 0 4px; }
+
+/* ----- simulation tab ----- */
+.sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 6px; }
+.sim-toggle { margin-right: 4px; }
+.sim-speed-label { margin: 0 0 0 4px; font-weight: normal; }
+#sim_speed { width: 90px; }
+#simCanvas { border: 0; max-width: 100%; display: block; }
+
+.app-footer { max-width: 1060px; margin: 8px auto 16px; padding: 0 16px; font-size: 12px; }
