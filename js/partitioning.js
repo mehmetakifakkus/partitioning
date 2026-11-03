@@ -536,7 +536,8 @@ function GenePool(p, d){
     function initPopulation(){
         var base = getMainAngle(self.path).angle;
         for(var j=0; j < POPULATION; j++){
-            var line = new Line(base + 90 * (j % 4) + (j < 4 ? 0 : getRandomFloat(-45, 45)));
+            var angle = base + 90 * (j % 4) + (j < 4 ? 0 : getRandomFloat(-45, 45));
+            var line = new Line(((angle % 360) + 360) % 360);
             evaluate(line);
             self.lines.push(line);
         }
@@ -745,6 +746,7 @@ function simAdvance(){
 window.simToggle = function(){
     sim.enabled = document.getElementById("simulate").checked;
     document.getElementById("sim_panel").style.display = sim.enabled ? 'block' : 'none';
+    document.getElementById("sim_hint").style.display = sim.enabled ? 'none' : 'block';
     if(!sim.enabled && sim.next) // continue the running pool in fast mode
         simAdvance();
 }
@@ -754,6 +756,8 @@ window.simPlayPause = function(){
     document.getElementById("sim_play").innerHTML = sim.playing ? 'Pause' : 'Play';
     if(sim.playing && sim.next)
         simAdvance();
+    else if(sim.playing && sim.enabled && !running)
+        window.iterate();
     else
         window.clearTimeout(sim.timer);
 }
@@ -831,14 +835,14 @@ function drawGeneRow(ctx, y, label, line, background, status){
     var W = ctx.canvas.width;
     if(background){
         ctx.fillStyle = background;
-        ctx.fillRect(0, y - 14, W, 26);
+        ctx.fillRect(0, y - 10, W, 20);
     }
     ctx.fillStyle = '#333';
     ctx.font = '13px sans-serif';
     ctx.fillText(label, 6, y + 4);
 
     // compass needle showing the gene (cut direction)
-    var cx = 62, r = 10, rad = line.angle * Math.PI / 180;
+    var cx = 62, r = 8, rad = line.angle * Math.PI / 180;
     ctx.strokeStyle = '#999';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx, y, r, 0, 2 * Math.PI); ctx.stroke();
@@ -850,7 +854,7 @@ function drawGeneRow(ctx, y, label, line, background, status){
     ctx.fillText(fmtAngle(line.angle), 82, y + 4);
 
     // fitness bar
-    var bx = 150, bw = W - bx - 130;
+    var bx = 140, bw = W - bx - 128;
     ctx.fillStyle = '#e9ecef';
     ctx.fillRect(bx, y - 7, bw, 14);
     if(status != 'unscored'){
@@ -921,10 +925,10 @@ function drawSimulation(pool, g){
     wrapText(ctx, simExplanation(pool, g), 6, 94, W - 12, 17);
 
     // ----- population, sorted by fitness
-    var y0 = 160;
+    var y0 = 172, rowH = 21;
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#868e96';
-    ctx.fillText('Population (gene = cut angle), sorted by fitness', 6, y0 - 18);
+    ctx.fillText('Population (gene = cut angle), sorted by fitness', 6, y0 - 20);
     for(var k=0; k < pool.lines.length; k++){
         var line = pool.lines[k], bg = null, status = '';
         if(g.phase == 'tournament' && (line == g.a || line == g.b))
@@ -939,11 +943,11 @@ function drawSimulation(pool, g){
             bg = '#d3f9d8';
             status = 'new';
         }
-        drawGeneRow(ctx, y0 + k * 26, '#' + (k + 1), line, bg, status);
+        drawGeneRow(ctx, y0 + k * rowH, '#' + (k + 1), line, bg, status);
     }
 
     // ----- the child being created
-    var yc = y0 + pool.lines.length * 26 + 14;
+    var yc = y0 + pool.lines.length * rowH + 12;
     if(g.child){
         var scored = g.phase == 'evaluation' || g.phase == 'replacement';
         var bgc = g.phase == 'replacement' ? (g.accepted ? '#d3f9d8' : '#ffe3e3') : '#d0ebff';
@@ -952,7 +956,7 @@ function drawSimulation(pool, g){
     if(g.phase == 'replacement' && g.accepted){
         ctx.fillStyle = SIM_COLORS.rejected;
         ctx.font = '12px sans-serif';
-        ctx.fillText('eliminated: ' + fmtAngle(g.worst.angle) + ' (' + fmtFit(g.worst.fitnessValue) + ')', 6, yc + 30);
+        ctx.fillText('eliminated: ' + fmtAngle(g.worst.angle) + ' (' + fmtFit(g.worst.fitnessValue) + ')', 6, yc + 24);
     }
 }
 
