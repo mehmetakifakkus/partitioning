@@ -9,7 +9,7 @@ You can [visit this page](https://mehmetakifakkus.github.io/partitioning/)
 
 Taken from the live site: on a desktop (1548 × 850) and on a phone (360 px wide).
 
-<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height, with the Settings & Stats and GA Simulation tabs on the right" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width and the tabs are below it" width="180"/>
+<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height, with the Partition, Simulation and GA Settings tabs on the right" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width and the tabs are below it" width="180"/>
 
 
 ## Overview
@@ -23,7 +23,7 @@ The project is a static web page: there is no build step, package manager or ser
 The page has the polygon canvas on the left and a panel with three tabs on the right: **Partition**, **Simulation** and **GA Settings**. The canvas scales to fill the window (it keeps its 500 × 500 coordinate system); on phones and narrow windows the panel moves below it, and the polygon can be edited by touch.
 
 ### Partition
-- **Shape:** pick one of the four shapes shown as thumbnails (Square, House, Heptagon, Concave). The selected one is highlighted.
+- **Shape:** pick one of the eight shapes shown as thumbnails (Square, House, Heptagon, Concave, L-shape, Trapezoid, Triangle, Cross). The selected one is highlighted. Shapes are defined in the `SHAPES` list in `js/partitioning.js`.
 - **Edit the polygon:** drag vertices or edges on the canvas; hold `CTRL` and click to add a new vertex.
 - **Parcel distribution:** enter comma-separated weights (they are normalized automatically), or click a preset chip such as `50 · 30 · 10 · 10`.
 - **Iterate:** runs the algorithm. A progress bar shows the current cut and generation. Keyboard: `0` runs it, `1`–`9` re-runs a single cut (ignored while typing in a text field).

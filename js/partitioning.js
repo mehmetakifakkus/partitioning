@@ -76,8 +76,19 @@ var SHAPES = [
     {name: 'Square',   points: [[100,100],[400,100],[400,400],[100,400]]},
     {name: 'House',    points: [[100,200],[250,100],[400,200],[400,400],[100,400]]},
     {name: 'Heptagon', points: [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[190.5,90],[257.5,57]]},
-    {name: 'Concave',  points: [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[287.5,222],[257.5,57]]}
+    {name: 'Concave',  points: [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[287.5,222],[257.5,57]]},
+    {name: 'L-shape',  points: [[100,100],[260,100],[260,260],[420,260],[420,420],[100,420]]},
+    {name: 'Trapezoid', points: [[170,120],[340,120],[440,400],[70,400]]},
+    {name: 'Triangle', points: [[250,80],[440,410],[60,410]]},
+    {name: 'Cross',    points: [[190,90],[310,90],[310,190],[410,190],[410,310],[310,310],[310,410],[190,410],[190,310],[90,310],[90,190],[190,190]]}
 ];
+
+function shapeViewBox(points){ // thumbnail view box: the shape's bounds plus a margin, as a square
+    var xs = points.map(function(p){ return p[0]; }), ys = points.map(function(p){ return p[1]; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var size = Math.max(maxX - minX, maxY - minY) * 1.12, cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    return [cx - size / 2, cy - size / 2, size, size].map(function(v){ return v.toFixed(1); }).join(' ');
+}
 var DIST_PRESETS = ['33,33,33', '50,33,17', '40,40,20', '50,30,10,10', '90,5,5'];
 
 function buildPresetPickers(){
@@ -87,7 +98,7 @@ function buildPresetPickers(){
         for(var i=0; i < SHAPES.length; i++){
             var pts = SHAPES[i].points.map(function(p){ return p[0] + ',' + p[1]; }).join(' ');
             html += '<button type="button" class="shape-btn" data-shape="' + (i + 1) + '" onclick="createInitialPolygon(' + (i + 1) + ')" aria-label="Shape ' + (i + 1) + ': ' + SHAPES[i].name + '">'
-                  + '<svg viewBox="80 40 390 380" aria-hidden="true"><polygon points="' + pts + '"/></svg>'
+                  + '<svg viewBox="' + shapeViewBox(SHAPES[i].points) + '" aria-hidden="true"><polygon points="' + pts + '"/></svg>'
                   + '<span>' + SHAPES[i].name + '</span></button>';
         }
         picker.innerHTML = html;
@@ -1246,7 +1257,7 @@ window.show = function(){
         s.bringToFront();
         // label at the point inside the part that is farthest from its edges, sized to fit there
         var spot = labelSpot(s);
-        var fontSize = Math.max(10, Math.min(44, spot.radius / 1.4));
+        var fontSize = Math.max(9, Math.min(44, spot.radius / 1.8)); // "50.0%" is about 2.7 font sizes wide
         drawables.push(new PointText({ point: spot.point + [0, fontSize / 3], justification: 'center', fontSize: fontSize + 'px', fontWeight: 'bold',
                                        fillColor: 'white', strokeColor: 'rgba(0,0,0,0.35)', strokeWidth: 0.6, content: pct.toFixed(1) + '%'}));
         parts.push({color: color, pct: pct});
