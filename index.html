@@ -30,7 +30,10 @@
 <body>
 
 <header class="app-header">
-    <h1>Genetic Algorithm Solution for Polygon Decomposition</h1>
+    <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <h1>Polygon Decomposition <span>with a Genetic Algorithm</span></h1>
+    </div>
     <details class="about">
         <summary>About</summary>
         <p>
@@ -47,80 +50,167 @@
 <main class="app">
 
     <section class="app-left">
-        <canvas id="myCanvas" height="300" width="300"></canvas>
-        <div class="polygon-presets">
-            <label>Polygon:</label>
-            <button type="button" class="btn btn-link" onclick="createInitialPolygon(1)">1</button>|
-            <button type="button" class="btn btn-link" onclick="createInitialPolygon(2)">2</button>|
-            <button type="button" class="btn btn-link" onclick="createInitialPolygon(3)">3</button>|
-            <button type="button" class="btn btn-link" onclick="createInitialPolygon(4)">4</button>
-            <span class="hint">Drag points or edges &middot; CTRL + click adds a point</span>
+        <div class="card canvas-card">
+            <canvas id="myCanvas" height="300" width="300"></canvas>
+            <p class="hint canvas-hint">Drag points or edges to edit the polygon &middot; CTRL + click adds a point</p>
         </div>
     </section>
 
     <section class="app-right">
-        <ul class="nav nav-tabs">
-            <li class="active"><a href="#tab_settings" data-toggle="tab">Settings &amp; Stats</a></li>
-            <li><a href="#tab_sim" data-toggle="tab">GA Simulation</a></li>
-        </ul>
+        <div class="card panel-card">
+            <ul class="nav nav-tabs">
+                <li class="active"><a href="#tab_settings" data-toggle="tab">Partition</a></li>
+                <li><a href="#tab_sim" data-toggle="tab">Simulation</a></li>
+                <li><a href="#tab_ga" data-toggle="tab">GA Settings</a></li>
+            </ul>
 
-        <div class="tab-content">
+            <div class="tab-content">
 
-            <div class="tab-pane active" id="tab_settings">
-                <h4>Parcel distribution</h4>
-                <div class="dist-row">
-                    <input type="text" name="txt" onchange="window.readDistAndNormalize()" class="form-control" id="dist" value="50,30,10,10">
-                    <button type="button" id="run" class="btn btn-warning" onclick="iterate()">Iterate</button>
-                </div>
-                <label>Try another:</label>
-                <button type="button" class="btn btn-link" onclick="loadDistribution(1)">1</button>|
-                <button type="button" class="btn btn-link" onclick="loadDistribution(2)">2</button>|
-                <button type="button" class="btn btn-link" onclick="loadDistribution(3)">3</button>|
-                <button type="button" class="btn btn-link" onclick="loadDistribution(4)">4</button>|
-                <button type="button" class="btn btn-link" onclick="loadDistribution(5)">5</button>
+                <div class="tab-pane active" id="tab_settings">
+                    <div class="section-label">Shape</div>
+                    <div id="shape_picker" class="shape-picker" role="group" aria-label="Choose a shape"></div>
 
-                <h4>Obtain&hellip;</h4>
-                <div class="objectives">
-                    <label><input class="well-shaped-rectangles" type="checkbox" checked> well-shaped rectangles</label>
-                    <label><input class="good-aspect-ratio" type="checkbox" checked> good aspect ratio</label>
-                    <label><input class="well-filled-circles" type="checkbox" checked> good circle-filled polygons</label>
-                    <label><input class="convexity" type="checkbox"> more convex polygons</label>
-                </div>
+                    <label class="section-label" for="dist">Parcel distribution</label>
+                    <div class="dist-row">
+                        <input type="text" name="txt" onchange="window.readDistAndNormalize()" class="form-control" id="dist" value="50,30,10,10" inputmode="decimal" aria-describedby="dist_help">
+                        <button type="button" id="run" class="btn btn-run" onclick="iterate()">&#9654; Iterate</button>
+                    </div>
+                    <p id="dist_help" class="hint">Comma-separated weights, or pick a preset:</p>
+                    <div id="dist_presets" class="chips" role="group" aria-label="Distribution presets"></div>
 
-                <h4>Best item statistics</h4>
-                <div class="stats">
-                    <div>
+                    <div class="progress-wrap" aria-live="polite">
+                        <div class="progress-track"><div id="run_bar" class="progress-fill"></div></div>
+                        <span id="run_label" class="hint">Ready</span>
+                    </div>
+
+                    <div class="section-label">Objectives</div>
+                    <div class="objectives">
+                        <label class="toggle"><input class="well-shaped-rectangles" type="checkbox" checked><span>Well-shaped rectangles</span></label>
+                        <label class="toggle"><input class="good-aspect-ratio" type="checkbox" checked><span>Good aspect ratio</span></label>
+                        <label class="toggle"><input class="well-filled-circles" type="checkbox" checked><span>Circle-filled polygons</span></label>
+                        <label class="toggle"><input class="convexity" type="checkbox"><span>More convex polygons</span></label>
+                    </div>
+
+                    <div class="section-label">Result</div>
+                    <div id="result_legend" class="legend"></div>
+                    <div class="stats">
                         <p id="info_iter">Iteration no:  0</p>
                         <p id="info_fitness">Fitness value: 0</p>
-                    </div>
-                    <div>
                         <p id="info_area">Area consistency: 0</p>
                         <p id="info_ratio">Aspect ratio consistency: 0</p>
                         <p id="info_rect">Rectanglity consistency: 0</p>
                     </div>
                 </div>
-            </div>
 
-            <div class="tab-pane" id="tab_sim">
-                <div class="sim-controls">
-                    <label class="sim-toggle"><input type="checkbox" id="simulate" onchange="window.simToggle()"> Simulate</label>
-                    <button type="button" id="sim_play" class="btn btn-default btn-sm" onclick="window.simPlayPause()">Pause</button>
-                    <button type="button" id="sim_step" class="btn btn-default btn-sm" onclick="window.simStep()">Step</button>
-                    <label for="sim_speed" class="sim-speed-label">Speed</label>
-                    <input type="range" id="sim_speed" min="0" max="100" value="67" oninput="window.simSpeed(this.value)">
+                <div class="tab-pane" id="tab_sim">
+                    <div class="sim-controls">
+                        <label class="sim-toggle"><input type="checkbox" id="simulate" onchange="window.simToggle()"> Simulate</label>
+                        <button type="button" id="sim_play" class="btn btn-default btn-sm" onclick="window.simPlayPause()">Pause</button>
+                        <button type="button" id="sim_step" class="btn btn-default btn-sm" onclick="window.simStep()">Step</button>
+                        <label for="sim_speed" class="sim-speed-label">Speed</label>
+                        <input type="range" id="sim_speed" min="0" max="100" value="67" oninput="window.simSpeed(this.value)">
+                    </div>
+                    <p id="sim_hint" class="hint">Tick <b>Simulate</b>, then press <b>Play</b> or <b>Step</b> to watch each generation: tournament &rarr; mutation &rarr; evaluation &rarr; replacement.</p>
+                    <div id="sim_panel" style="display:none">
+                        <canvas id="simCanvas" width="460" height="430"></canvas>
+                    </div>
                 </div>
-                <p id="sim_hint" class="hint">Tick <b>Simulate</b>, then press <b>Play</b> or <b>Step</b> to watch each generation: tournament &rarr; mutation &rarr; evaluation &rarr; replacement.</p>
-                <div id="sim_panel" style="display:none">
-                    <canvas id="simCanvas" width="460" height="430"></canvas>
-                </div>
-            </div>
 
+                <div class="tab-pane" id="tab_ga">
+                    <fieldset class="settings-group">
+                        <legend>Speed</legend>
+                        <div class="setting">
+                            <label for="cfg_perFrame">Generations per frame</label>
+                            <input type="range" id="cfg_perFrame" data-setting="perFrame" min="1" max="50" step="1" oninput="window.changeSetting(this)">
+                            <output data-for="perFrame"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_frameDelay">Delay between frames</label>
+                            <input type="range" id="cfg_frameDelay" data-setting="frameDelay" min="0" max="500" step="10" oninput="window.changeSetting(this)">
+                            <output data-for="frameDelay"></output>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="settings-group">
+                        <legend>Run</legend>
+                        <div class="setting">
+                            <label for="cfg_generations">Generations per cut</label>
+                            <input type="range" id="cfg_generations" data-setting="generations" min="20" max="1000" step="10" oninput="window.changeSetting(this)">
+                            <output data-for="generations"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_population">Population size</label>
+                            <input type="range" id="cfg_population" data-setting="population" min="4" max="40" step="1" oninput="window.changeSetting(this)">
+                            <output data-for="population"></output>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="settings-group">
+                        <legend>Mutation</legend>
+                        <div class="setting">
+                            <label for="cfg_fineProb">Fine rotation</label>
+                            <input type="range" id="cfg_fineProb" data-setting="fineProb" min="0" max="100" step="5" oninput="window.changeSetting(this)">
+                            <output data-for="fineProb"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_fineRange">Fine rotation range</label>
+                            <input type="range" id="cfg_fineRange" data-setting="fineRange" min="1" max="20" step="1" oninput="window.changeSetting(this)">
+                            <output data-for="fineRange"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_coarseProb">Coarse rotation</label>
+                            <input type="range" id="cfg_coarseProb" data-setting="coarseProb" min="0" max="100" step="5" oninput="window.changeSetting(this)">
+                            <output data-for="coarseProb"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_coarseRange">Coarse rotation range</label>
+                            <input type="range" id="cfg_coarseRange" data-setting="coarseRange" min="10" max="90" step="5" oninput="window.changeSetting(this)">
+                            <output data-for="coarseRange"></output>
+                        </div>
+                        <div class="setting setting-readonly">
+                            <span>Jump by 90&deg; / 180&deg; / 270&deg;</span>
+                            <span></span>
+                            <output id="jump_prob"></output>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="settings-group">
+                        <legend>Objective weights</legend>
+                        <div class="setting">
+                            <label for="cfg_wRect">Rectangles</label>
+                            <input type="range" id="cfg_wRect" data-setting="wRect" min="0" max="1" step="0.01" oninput="window.changeSetting(this)">
+                            <output data-for="wRect"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_wRatio">Aspect ratio</label>
+                            <input type="range" id="cfg_wRatio" data-setting="wRatio" min="0" max="0.05" step="0.001" oninput="window.changeSetting(this)">
+                            <output data-for="wRatio"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_wCircle">Circle filling</label>
+                            <input type="range" id="cfg_wCircle" data-setting="wCircle" min="0" max="1" step="0.01" oninput="window.changeSetting(this)">
+                            <output data-for="wCircle"></output>
+                        </div>
+                        <div class="setting">
+                            <label for="cfg_wConvex">Convexity</label>
+                            <input type="range" id="cfg_wConvex" data-setting="wConvex" min="0" max="0.5" step="0.01" oninput="window.changeSetting(this)">
+                            <output data-for="wConvex"></output>
+                        </div>
+                    </fieldset>
+
+                    <div class="settings-footer">
+                        <button type="button" class="btn btn-default btn-sm" onclick="window.resetSettings()">Reset to defaults</button>
+                        <span class="hint">Changes apply right away (population from the next run) and are saved in this browser.</span>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </section>
 
 </main>
 
-<footer class="app-footer text-muted">
+<footer class="app-footer">
     Developed by <a href="http://www.ceng.metu.edu.tr/~akifakkus/doku.php" target="_blank">Mehmet Akif AKKUS</a> using paper.js, nerdamer.js and numeric.js
 </footer>
 
