@@ -518,9 +518,13 @@ function GenePool(p, d){
     function evaluate(line){ // solve the offset exactly for the area ratio, then score the shape
         line.offset = findCutOffset(self.path, line.angle, self.dist[0]);
         var sides = cutPath(self.path, line);
-        line.fitnessValue = fitnessFunction(sides, self.dist[0], self.path);
+        line.fitnessValue = fitnessFunction(sides, self.dist[0], self.path, isLastPool());
         sides[0].remove();
         sides[1].remove();
+    }
+
+    function isLastPool(){ // the last pool's remainder is not cut again, so its shape counts too
+        return pools.indexOf(self) == pools.length - 1;
     }
 
     function sortLines(){
@@ -541,7 +545,7 @@ function GenePool(p, d){
         var best = self.lines[0];
         self.removeBest();
         self.bestSides = cutPath(self.path, best);
-        fitnessFunction(self.bestSides, self.dist[0], self.path); // refresh the statistics for the best item
+        fitnessFunction(self.bestSides, self.dist[0], self.path, isLastPool()); // refresh the statistics for the best item
         document.getElementById("info_fitness").innerHTML = "Fitness value:  " + best.fitnessValue.toFixed(4);
     }
 
@@ -574,14 +578,38 @@ function GenePool(p, d){
     }
 };
 
-function fitnessFunction(sides, dist, path){ // distribution
+var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25, circleWeight = 0.3;
 
-    var total = areaPenalty = aspectRatioPenalty = concavityPenalty = rectanglityPenalty = 0
-    var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25;
+function shapePenalty(polygon, stats){ // weighted sum of the enabled shape objectives for one part
+    var total = 0;
+
+    if($('.good-aspect-ratio:checked').val()){
+        stats.ratio += ratioWeight * (aspectRatio(polygon) - 1);
+        total += ratioWeight * (aspectRatio(polygon) - 1);
+    }
+
+    var res = rectanglityandConcavity(polygon);
+
+    if($('.well-shaped-rectangles:checked').val()){
+        stats.rect += rectWeight * res.diff;
+        total += rectWeight * res.diff;
+    }
+
+    if($('.convexity:checked').val())
+        total += concavityWeight * res.concave; // number of concave points
+
+    if($('.well-filled-circles:checked').val())
+        total += circleWeight * miniDisc(polygon).areaPenalty;
+
+    return total;
+}
+
+// bothSides: score the shape of both parts (used by the last pool, whose remainder is a final part as well)
+function fitnessFunction(sides, dist, path, bothSides){
 
     if(typeof sides[0]  == 'undefined')
         debugger
-    
+
     if(sides[0].className == "CompoundPath" || sides[1].className == "CompoundPath") // cut produced several pieces
         return 0;
 
@@ -589,41 +617,22 @@ function fitnessFunction(sides, dist, path){ // distribution
     if(Math.abs(areaA + areaB - Math.abs(path.area)) > 0.005 * Math.abs(path.area)) // boolean operation failed
         return 0;
 
-    areaPenalty += Math.abs(areaA / (areaA + areaB) - dist);
-    
-    document.getElementById("info_area").innerHTML = "Area consistency: " + (1-areaPenalty).toFixed(6);
-    
-    areaPenalty = areaWeight * areaPenalty;
-    //console.log("Area Penalty: "+areaPenalty.toFixed(6));
-        
-    if($('.good-aspect-ratio:checked').val()){
-        aspectRatioPenalty = ratioWeight*(aspectRatio(sides[0]) - 1);
-        document.getElementById("info_ratio").innerHTML = "Aspect ratio consistency: "+ (1-aspectRatioPenalty).toFixed(6);
-        //console.log("Aspect ratio penalty: "+aspectRatioPenalty.toFixed(3));
-        total += aspectRatioPenalty;
-    }
-    
-    var res = rectanglityandConcavity(sides[0]);
-    
-    if($('.well-shaped-rectangles:checked').val()){
-        rectanglityPenalty = rectWeight * (res.diff);
-        //console.log("Rectanglity penalty: "+rectanglityPenalty.toFixed(3));
-        document.getElementById("info_rect").innerHTML = "Rectanglity consistency: "+ (1-rectanglityPenalty).toFixed(6);
-        total += rectanglityPenalty;
-    }
+    var areaPenalty = areaWeight * Math.abs(areaA / (areaA + areaB) - dist);
 
-    if($('.convexity:checked').val()){    
-        concavityPenalty = concavityWeight*(res.concave); //number of concave points
-        //console.log("Concavity penalty: "+concavityPenalty.toFixed(3));
-        total +=concavityPenalty;
+    var stats = {ratio: 0, rect: 0};
+    var total = shapePenalty(sides[0], stats), count = 1;
+    if(bothSides){
+        total += shapePenalty(sides[1], stats);
+        count = 2;
     }
-    
-    if($('.well-filled-circles:checked').val()){    
-        var result = miniDisc(sides[0]);
-        result.areaPenalty = 0.3 * result.areaPenalty;
-        //console.log("Circle Area Penalty: "+result.areaPenalty);
-        total+=result.areaPenalty;
-    }
+    total /= count;
+
+    document.getElementById("info_area").innerHTML = "Area consistency: " + (1 - areaPenalty).toFixed(6);
+    if($('.good-aspect-ratio:checked').val())
+        document.getElementById("info_ratio").innerHTML = "Aspect ratio consistency: " + (1 - stats.ratio / count).toFixed(6);
+    if($('.well-shaped-rectangles:checked').val())
+        document.getElementById("info_rect").innerHTML = "Rectanglity consistency: " + (1 - stats.rect / count).toFixed(6);
+
     return 1 - (areaPenalty + total);
 }
 
