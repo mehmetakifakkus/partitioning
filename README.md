@@ -18,7 +18,7 @@ The project is a static web page: there is no build step, package manager or ser
 - **Edit the polygon:** drag vertices or edges; hold `CTRL` and click to add a new vertex.
 - **Parcel distribution:** enter comma-separated weights (they are normalized automatically), or pick one of the presets `1`–`5`.
 - **Objectives:** checkboxes toggle the optional fitness terms (well-shaped rectangles, good circle-filled polygons, good aspect ratio, more convex polygons).
-- **Iterate:** runs the algorithm. The *Best Item Statistics* panel shows the iteration number, the fitness value and the consistency scores of the best solution.
+- **Iterate:** runs the algorithm (keyboard: `0`; `1`–`9` re-runs a single pool). The *Best Item Statistics* panel shows the iteration number, the fitness value and the consistency scores of the best solution.
 
 ## Project Structure
 
@@ -36,38 +36,38 @@ The project is a static web page: there is no build step, package manager or ser
 All of the logic lives in `js/partitioning.js`.
 
 ### Representation
-- An **individual** is a cutting line, defined by a center point and an angle (`Line`).
-- Each **gene pool** (`GenePool`) holds a population of 10 lines. The initial angle comes from the principal eigenvector of the covariance matrix of the polygon's vertices (`getMainAngle`, a PCA-like approach).
+- An **individual** is a cutting line. Its gene is the line's **direction angle** (`Line`).
+- For a given angle, the line's **offset** is not evolved. It is solved exactly by bisection (`findCutOffset`): the half-plane area is computed with Sutherland–Hodgman clipping, so the first part always gets exactly the requested area ratio. The genetic algorithm therefore only has to search for the angle that gives the best-shaped parts.
+- Each **gene pool** (`GenePool`) holds a population of 10 lines. The initial angles come from the principal axis of the polygon's vertices (`getMainAngle`, a PCA-like approach), rotated by 0°/90°/180°/270° and by random amounts.
 
 ### Mutation (`mutation`)
 | Probability | Operation |
 |---|---|
-| 60% | Rotate the line by a random angle |
-| 35% | Move the line toward the target area ratio |
-| 5% | Turn the line by 90° (skipped once the line is good enough) |
-
-The size of each change grows as fitness gets worse: the coefficient is `(5 · (1 − fitness))²`.
+| 60% | Fine rotation (±5°) |
+| 30% | Coarse rotation (±45°) |
+| 10% | Jump by 90°, 180° or 270° (180° swaps which side gets the target area) |
 
 ### Selection
-After each step, the population is sorted by fitness. The two worst individuals are replaced by copies of the two best (elitism). The loop stops when fitness exceeds `0.999` or after 200 iterations.
+Steady-state GA: a parent is chosen by tournament selection, mutated and evaluated. The child replaces the worst individual if it is better. Each pool runs 200 evaluations, or stops early when fitness exceeds `0.9999`.
 
 ### Fitness (`fitnessFunction`)
-Fitness is `1 − Σ penalties`:
+Fitness is `1 − Σ penalties`. A cut that splits the polygon into more than two pieces gets fitness 0.
 
 | Penalty | Weight | Description | Optional |
 |---|---|---|---|
-| Area | 1 | Deviation from the target area ratio | No |
+| Area | 1 | Deviation from the target area ratio (≈ 0, since the offset is solved exactly) | No |
 | Aspect ratio | 0.005 | Ratio of the covariance eigenvalues (`aspectRatio`) | Yes |
 | Rectangularity | 0.25 | Deviation of the interior angles from 90° | Yes |
 | Convexity | 0.1 | Number of concave vertices | Yes |
 | Circle filling | 0.3 | Unfilled area of the minimum enclosing circle (`miniDisc`, Welzl-style) | Yes |
 
 ### Multi-part decomposition
-The polygon is divided step by step. Each gene pool cuts the current polygon in two. The next pool takes the remaining part, renormalizes the remaining weights, and cuts again (`processPool`, `changeLinePool`).
+The polygon is divided step by step. Each gene pool cuts the current polygon in two. When it finishes, the next pool takes the remaining part, renormalizes the remaining weights and cuts again (`runPool`). A distribution with *n* parts uses *n − 1* pools.
 
 ## Known Limitations
 
-- `window.iterate` only calls `processPool(0)` and `processPool(1)`. The call for the third pool is commented out, so distributions with more than three parts (including the default `50,30,10,10`) do not seem to be fully processed.
+- The shape objectives are evaluated only on the part a pool cuts off, not on the remainder. The last part's shape is therefore not optimized directly.
+- Weights are sorted in descending order before cutting (`normalize`), so the largest part is always cut first.
 - The code is a research prototype: it still contains `debugger` statements, verbose `console` logging and commented-out code (e.g. a *Stop* button).
 - There are no automated tests.
 

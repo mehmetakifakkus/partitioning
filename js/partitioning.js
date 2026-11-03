@@ -68,13 +68,11 @@ function onKeyDown(event){
     
     var num = parseInt(event.key)
         
-    if(num == 1)
-        pools[0].divide();
-    if(num >= 2 || num <= 9)
-        processPool(num-1);
     if(num == 0)
         window.iterate();
-    
+    else if(!running && num <= pools.length)
+        runPool(num-1, false); // run a single pool on what the previous one left
+
     window.show();
 }
 
@@ -94,13 +92,11 @@ function PolygonPoint(p){
     }
 };
 
-function Line(angle, p, fitness){
-    
+function Line(angle, fitness){ // a cutting line: its direction is the GA gene, its offset is solved exactly
+
     this.angle = angle;
-    this.center = p;
-    this.fitnessValue = fitness || 0;  
-    this.done = 0; // stop turning 90 degrees
-    this.movingDir = 0; // -1 for to center, +1 going far
+    this.offset = 0;
+    this.fitnessValue = fitness || 0;
 };
 
 
@@ -122,11 +118,11 @@ Array.prototype.clear = function() {
 function getDataFromPath(path){  // path is a paperjs object, get Nx2 data array from it
  
     var points = [];
-    var seg = path.segments;    
-    
-    points = [];
-    for(k=0; k < seg.length; k++)
-        points.push([seg[k].point.x, seg[k].point.y]);
+    var items = path.className == 'CompoundPath' ? path.children : [path];
+
+    for(var c=0; c < items.length; c++)
+        for(var k=0; k < items[c].segments.length; k++)
+            points.push([items[c].segments[k].point.x, items[c].segments[k].point.y]);
 
     return points;
 }
@@ -349,52 +345,87 @@ function getMainAngle(polygon){
     else
         vec = eig.E.x[1];
     var angle = numeric.atan([vec[1]/vec[0]])*(180 / Math.PI);
-    return new Line(angle + 90, new Point(center));    
+    return new Line(angle + 90);    
 }
 
-function createSide(angle, p, dir){
-    
-    // this is the starting seperating line 
-    var path = new Path.Line({name: 'line', closed:true, from: p - [1499, 0], to: p + [1499, 0]}); // add  strokeColor:'black', strokeWidth: 2
-    
-    if(dir){
-        path.lineBy(1499, -1499);
-        path.lineBy(0, -1499)
-    }
-    else{
-        path.lineBy(499, 1099);
-        path.lineBy(0, 1099)
-    }
-    
-    path.rotate(-angle, p); // merkez etrafinda donus yap (-angle because coordinate system differs)
-    drawables.push(path);
-    return path;
+///////////////////////////////   exact area cut   /////////////////////////////////
+// A cutting line is given by its direction angle and an offset along its normal n:
+// side A = {x : n.x <= offset}, side B = {x : n.x >= offset}.
+// For a given angle the offset is found by bisection, so that side A has exactly the requested area ratio.
+
+function lineNormal(angle){
+    var rad = angle * Math.PI / 180;
+    return [-Math.sin(rad), Math.cos(rad)];
 }
 
-function createSides(path, line){
-    
-    var linePath = new Path.Line({name: 'line', from: line.center - [1499, 0], to: line.center + [1499, 0]}); 
-    linePath.rotate(-line.angle, line.center); // merkez etrafinda donus yap (-angle because coordinate system differs)
-    var dd = linePath.intersect(path);
-    dd.style = {strokeColor:'black', strokeWidth:2, opacity: 0.4};    
-    
-    if(typeof dd.children[0] == 'undefined')
-        return null;
-    
-    refreshPoints(); 
-        
-    var side = createSide(line.angle, line.center, 1)
-    var int1 = side.intersect(path);
-    int1.style = {name: 'intersect', opacity:0.5}
-    
-    var side2 = createSide(line.angle, line.center, 0)
-    var int2 = side2.intersect(path);
-    int2.style = {name: 'intersect', opacity:0.5}
-    
-    line.center = new Point(getPolygonCenter(dd.children[0])); // set the center intersection center
-    
-    drawables.push(int1, int2, linePath, dd)
-    return [int1, int2, dd];
+function getRings(path){ // vertex rings of a Path or CompoundPath
+    var items = path.className == 'CompoundPath' ? path.children : [path];
+    var rings = [];
+    for(var c=0; c < items.length; c++){
+        var ring = [];
+        for(var k=0; k < items[c].segments.length; k++)
+            ring.push([items[c].segments[k].point.x, items[c].segments[k].point.y]);
+        rings.push(ring);
+    }
+    return rings;
+}
+
+function signedArea(pts){
+    var a = 0;
+    for(var k=0; k < pts.length; k++){
+        var p = pts[k], q = pts[(k+1) % pts.length];
+        a += p[0]*q[1] - q[0]*p[1];
+    }
+    return a / 2;
+}
+
+function clippedArea(rings, n, offset){ // area of the rings on side A (Sutherland-Hodgman against a half-plane)
+    var total = 0;
+    for(var r=0; r < rings.length; r++){
+        var ring = rings[r], out = [];
+        for(var k=0; k < ring.length; k++){
+            var a = ring[k], b = ring[(k+1) % ring.length];
+            var da = n[0]*a[0] + n[1]*a[1] - offset, db = n[0]*b[0] + n[1]*b[1] - offset;
+            if(da <= 0)
+                out.push(a);
+            if((da < 0 && db > 0) || (da > 0 && db < 0)){
+                var t = da / (da - db);
+                out.push([a[0] + t*(b[0]-a[0]), a[1] + t*(b[1]-a[1])]);
+            }
+        }
+        total += signedArea(out);
+    }
+    return Math.abs(total);
+}
+
+function findCutOffset(path, angle, ratio){
+    var rings = getRings(path), n = lineNormal(angle);
+    var lo = Infinity, hi = -Infinity;
+    for(var r=0; r < rings.length; r++)
+        for(var k=0; k < rings[r].length; k++){
+            var d = n[0]*rings[r][k][0] + n[1]*rings[r][k][1];
+            lo = Math.min(lo, d); hi = Math.max(hi, d);
+        }
+    var target = ratio * clippedArea(rings, n, hi);
+    for(var it=0; it < 60 && hi - lo > 1e-7; it++){
+        var mid = (lo + hi) / 2;
+        if(clippedArea(rings, n, mid) < target) lo = mid;
+        else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+function halfPlane(angle, offset, side){ // a large rectangle covering side A (side = -1) or side B (side = +1)
+    var nn = lineNormal(angle), n = new Point(nn[0], nn[1]), d = new Point(nn[1], -nn[0]);
+    var c = n * offset, L = 10000;
+    var p0 = c - d * L, p1 = c + d * L;
+    return new Path({segments: [p0, p1, p1 + n * (side * L), p0 + n * (side * L)], closed: true, insert: false});
+}
+
+function cutPath(path, line){ // returns [side A, side B]
+    var sideA = path.intersect(halfPlane(line.angle, line.offset, -1));
+    var sideB = path.intersect(halfPlane(line.angle, line.offset, 1));
+    return [sideA, sideB];
 }
 
 
@@ -453,103 +484,97 @@ function rectanglityandConcavity(polygon){
 
 //////////////////////////////    Genetic Algorithm  Main  //////////////////////////////
 
+var POPULATION = 10, GENERATIONS = 200, PER_TICK = 10;
+
 function GenePool(p, d){
     if (typeof GenePool.id == 'undefined')
         GenePool.id = 0;
-    
+
     this.id = GenePool.id++;
     this.path = p;
     this.dist = d;
-    this.lines = []
-    for(var j=0; j<10; j++) // create a pool
-        this.lines.push(getMainAngle(this.path))
-
-    this.t=1;
-    
+    this.lines = [];
+    this.t = 0;
     this.bestSides = 0;
-    this.linePath = 0;
-    
-    var tempObj = this;
-    
-    this.divide = function (){
 
-        var sides = createSides(tempObj.path, tempObj.lines[0]); // arbitrary starting line
-        console.log('start center: '+ tempObj.lines[0].center)
+    var self = this;
 
-        for(var j=0; j<10; j++, tempObj.t++)
-        {    
-            document.getElementById("info_iter").innerHTML = "Iteration no:  "+tempObj.id+" - "+tempObj.t;
+    this.removeBest = function(){
+        if(self.bestSides){
+            self.bestSides[0].remove();
+            self.bestSides[1].remove();
+        }
+        self.bestSides = 0;
+    }
 
-            var selected = getRandomInt(2, tempObj.lines.length);
-            var line = tempObj.lines[selected];
-   
-            //if(sides == null)
-              //  debugger
-            
-            line.movingDir = sides[0].area / tempObj.path.area - tempObj.dist[0] < 0 ? 1 : -1; // 
-   
-            mutation(line, new Point(getPolygonCenter(sides[0])), tempObj.path);
-            sides = createSides(tempObj.path, line);
-            
-            if(sides == null) // 2'ye bolme isleminde sikinti var
-            {
-                console.log('----- problem var -------')
-                tempObj.lines.splice(selected,1); // eliminate this one and put best
-                tempObj.lines.push(new Line(tempObj.lines[0].angle, tempObj.lines[0].center, tempObj.lines[0].fitnessValue));
-                sides = createSides(tempObj.path, tempObj.lines[0]); // arbitrary starting line
-                if(sides == null)
-                    debugger
-                    
-                continue;
+    this.reset = function(path, dist){
+        self.removeBest();
+        self.path = path;
+        self.dist = dist;
+        self.lines = [];
+        self.t = 0;
+    }
+
+    function evaluate(line){ // solve the offset exactly for the area ratio, then score the shape
+        line.offset = findCutOffset(self.path, line.angle, self.dist[0]);
+        var sides = cutPath(self.path, line);
+        line.fitnessValue = fitnessFunction(sides, self.dist[0], self.path);
+        sides[0].remove();
+        sides[1].remove();
+    }
+
+    function sortLines(){
+        self.lines.sort(function(a, b) {return b.fitnessValue - a.fitnessValue;});
+    }
+
+    function initPopulation(){
+        var base = getMainAngle(self.path).angle;
+        for(var j=0; j < POPULATION; j++){
+            var line = new Line(base + 90 * (j % 4) + (j < 4 ? 0 : getRandomFloat(-45, 45)));
+            evaluate(line);
+            self.lines.push(line);
+        }
+        sortLines();
+    }
+
+    function updateBest(){
+        var best = self.lines[0];
+        self.removeBest();
+        self.bestSides = cutPath(self.path, best);
+        fitnessFunction(self.bestSides, self.dist[0], self.path); // refresh the statistics for the best item
+        document.getElementById("info_fitness").innerHTML = "Fitness value:  " + best.fitnessValue.toFixed(4);
+    }
+
+    this.divide = function(onDone){
+        if(self.lines.length == 0)
+            initPopulation();
+
+        for(var j=0; j < PER_TICK && self.t < GENERATIONS; j++, self.t++){
+            document.getElementById("info_iter").innerHTML = "Iteration no:  " + (pools.indexOf(self) + 1) + " - " + (self.t + 1);
+
+            // tournament selection
+            var a = self.lines[getRandomInt(0, self.lines.length)], b = self.lines[getRandomInt(0, self.lines.length)];
+            var child = new Line(a.fitnessValue >= b.fitnessValue ? a.angle : b.angle);
+            mutation(child);
+            evaluate(child);
+
+            if(child.fitnessValue > self.lines[self.lines.length - 1].fitnessValue){ // replace the worst
+                self.lines[self.lines.length - 1] = child;
+                sortLines();
             }
-
-            line.fitnessValue = fitnessFunction(sides, tempObj.dist[0]);
-    
-            tempObj.lines.sort(function(a, b) {return b.fitnessValue - a.fitnessValue;});
-
-            tempObj.lines.pop(); tempObj.lines.pop() // eliminate the worst and put best
-            tempObj.lines.push(new Line(tempObj.lines[0].angle, tempObj.lines[0].center, tempObj.lines[0].fitnessValue));
-            tempObj.lines.push(new Line(tempObj.lines[1].angle, tempObj.lines[1].center, tempObj.lines[1].fitnessValue));
         }
-        document.getElementById("info_fitness").innerHTML = "Fitness value:  "+tempObj.lines[0].fitnessValue.toFixed(4);
-        sides = createSides(tempObj.path, tempObj.lines[0]);
-        
-        if(tempObj.bestSides)
-        {
-            tempObj.bestSides[0].remove()
-            tempObj.bestSides[1].remove()
-            tempObj.linePath.remove()
-        }
-        tempObj.bestSides = [sides[0].clone(), sides[1].clone()];
-        tempObj.linePath = sides[2].clone(); // correspondes to linePath
-      
+
+        updateBest();
         window.show();
 
-        if (tempObj.lines[0].fitnessValue < 0.999 && tempObj.t < 200) 
-            window.setTimeout(tempObj.divide, 0);  
-        
-        return tempObj.t;
-    }
-    
-    this.changeLinePool = function(part){ // bir onceki line ayni kalmis ise tekrar pool olusturma
-                
-        var part2 = tempObj.path.exclude(part)
-        if(tempObj.path.area - (part.area + part2.area) < 10) 
-        {
-            console.error('ayni kalmis')
-            tempObj.path = part;
-            return
-        }
-        
-        tempObj.path = part;
-        tempObj.lines.clear();
-        
-        for(var j=0; j<10; j++) // create a pool
-           tempObj.lines.push(getMainAngle(this.path)) 
+        if(self.t < GENERATIONS && self.lines[0].fitnessValue < 0.9999)
+            window.setTimeout(function(){ self.divide(onDone); }, 0);
+        else if(onDone)
+            onDone();
     }
 };
 
-function fitnessFunction(sides, dist){ // distribution
+function fitnessFunction(sides, dist, path){ // distribution
 
     var total = areaPenalty = aspectRatioPenalty = concavityPenalty = rectanglityPenalty = 0
     var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25;
@@ -557,10 +582,14 @@ function fitnessFunction(sides, dist){ // distribution
     if(typeof sides[0]  == 'undefined')
         debugger
     
-    if(sides[0].className == "CompoundPath") 
+    if(sides[0].className == "CompoundPath" || sides[1].className == "CompoundPath") // cut produced several pieces
         return 0;
-    
-    areaPenalty += Math.abs(sides[0].area / (sides[0].area + sides[1].area) - dist);
+
+    var areaA = Math.abs(sides[0].area), areaB = Math.abs(sides[1].area);
+    if(Math.abs(areaA + areaB - Math.abs(path.area)) > 0.005 * Math.abs(path.area)) // boolean operation failed
+        return 0;
+
+    areaPenalty += Math.abs(areaA / (areaA + areaB) - dist);
     
     document.getElementById("info_area").innerHTML = "Area consistency: " + (1-areaPenalty).toFixed(6);
     
@@ -598,59 +627,23 @@ function fitnessFunction(sides, dist){ // distribution
     return 1 - (areaPenalty + total);
 }
 
-function mutation(line, center, path){
-    if(line.fitnessValue > 0.98)
-        line.done = 1;
-        
+function mutation(line){
     var rand = Math.random();
-    var coef = Math.pow(Math.abs(1 - line.fitnessValue) * 5, 2);
-    if(rand < 0.6) // rotate seperating line
-    {
-        var randAngle = getRandomFloat(-9, 10) * coef;
-        line.angle += randAngle;
-        console.info('rotate - center: '+ line.center +', angle: '+randAngle.toFixed(2))
-
-    }
-    else if(rand < 0.95) // move seperating line 
-    {
-        line.center = new Point(getPolygonCenter(path)); // set the center intersection center
-
-        var linePath = new Path.Line({name: 'line', from: line.center - [1499, 0], to: line.center + [1499, 0]}); 
-        linePath.rotate(line.angle+90, line.center); // merkez etrafinda donus yap (-angle because coordinate system differs)
-        var dd = linePath.intersect(path);
-        
-        //debugger
-        var lineSeg = dd.children[0];
-        
-        if(typeof lineSeg == 'undefined')
-            debugger
-        
-        if(typeof lineSeg.segments == 'undefined')
-            debugger
-        var p1 = lineSeg.segments[0].point;
-        var p2 = lineSeg.segments[1].point;
-        var dist = p1.getDistance(p2);        
-        console.log(dist)
- 
-        var movingDir = (line.center - center).normalize(coef * getRandomFloat(1, 10)) * line.movingDir;
-        
-        console.info('move - center: '+ line.center +', dir: '+movingDir);
-
-        line.center += movingDir;          
-    }
-    else // %5 percentage change the direction 90 degree
-    {
-        if(!line.done) // if it done it is acceptable enough to not change direction
-            line.angle += 90;
-        else
-            console.log('done')
-    }
+    if(rand < 0.6)       // fine rotation of the separating line
+        line.angle += getRandomFloat(-5, 5);
+    else if(rand < 0.9)  // coarse rotation
+        line.angle += getRandomFloat(-45, 45);
+    else                 // jump by 90, 180 or 270 degrees (180 swaps the two sides)
+        line.angle += 90 * getRandomInt(1, 4);
+    line.angle = ((line.angle % 360) + 360) % 360;
 }
 
 
 ////////////////////////////   Html Part  ///////////////////////////////////////////////
 
 function generatePools(path){
+    for(var j=0; j < pools.length; j++)
+        pools[j].removeBest();
     pools.clear()
     for(var j=0; j < dist.length - 1; j++)
         pools.push(new GenePool(path, dist))
@@ -685,51 +678,58 @@ window.readDistAndNormalize();
 //    }
 
 
-function processPool(num){
-    if(num == 0)
-        pools[0].divide();
-    else{
-        pools[num].changeLinePool(pools[num-1].bestSides[1]);
-        pools[num].dist = normalize(pools[num-1].dist.slice(1));
-        pools[num].divide();
+var running = false;
+
+function runPool(num, chain){ // pool num cuts what the previous pool left over, then hands over to the next one
+    if(num >= pools.length){
+        running = false;
+        return;
     }
-    window.show();
+    if(num == 0)
+        pools[0].reset(myPath, dist);
+    else if(pools[num-1].bestSides)
+        pools[num].reset(pools[num-1].bestSides[1], normalize(pools[num-1].dist.slice(1)));
+    else{
+        running = false;
+        return;
+    }
+    running = true;
+    pools[num].divide(function(){
+        if(chain)
+            runPool(num + 1, true);
+        else
+            running = false;
+    });
 }
 
-
 window.iterate = function(){
-
-    function call(i, times){
-        
-        for(var k = 0; k < times; k++)
-            processPool(i);
-    }
-    
-    setTimeout(function() {processPool(0); }, 0);
-    setTimeout(function() {processPool(1); }, 1250);
-    //setTimeout(function() {processPool(2); }, 1000);
-    //setTimeout(function() {processPool(2); window.show();}, 1000); 
+    if(running)
+        return;
+    for(var j=0; j < pools.length; j++)
+        pools[j].removeBest();
+    runPool(0, true);
 }
 
 window.show = function(){
     
     clear();
     
+    if(pools.length == 0)
+        return;
+
+    function paint(s, color){
+        s.fillColor = color;
+        s.bringToFront();
+        drawables.push(new PointText({ point: new Point(getPolygonCenter(s)) - [(s.strokeBounds.width/6), 0], fontSize: (s.strokeBounds.width/8)+'px', fillColor: 'white', content: ''+ (100 * Math.abs(s.area/myPath.area)).toFixed(2)}));
+    }
+
     var k=0;
-    for(; k<dist.length-1; k++)
-    {
-        var s = pools[k].bestSides[0]
-        if(s){
-            s.fillColor = colors[k] 
-            drawables.push(new PointText({ point: new Point(getPolygonCenter(s)) - [(s.strokeBounds.width/6), 0], fontSize: (s.strokeBounds.width/8)+'px', fillColor: 'white', content: ''+ (100 * s.area/(myPath.area)).toFixed(2)}));
-        }
-    }
-    
-    var s = pools[k-1].bestSides[1];    
-    if(s){
-        s.fillColor = colors[k]
-        drawables.push(new PointText({ point: new Point(getPolygonCenter(s)) - [(s.strokeBounds.width/6), 0], fontSize: (s.strokeBounds.width/8)+'px', fillColor: 'white', content: ''+ (100 * s.area/(myPath.area)).toFixed(2)}))
-    }
+    for(; k < pools.length; k++)
+        if(pools[k].bestSides)
+            paint(pools[k].bestSides[0], colors[k]);
+
+    if(pools[k-1].bestSides)
+        paint(pools[k-1].bestSides[1], colors[k]);
 }
 
 window.loadDistribution = function(i){
