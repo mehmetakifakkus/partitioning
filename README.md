@@ -9,7 +9,7 @@ You can [visit this page](https://mehmetakifakkus.github.io/partitioning/)
 
 Taken from the live site: on a desktop (1548 × 850) and on a phone (360 px wide).
 
-<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height, with the Partition, Simulation and GA Settings tabs on the right" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width and the tabs are below it" width="180"/>
+<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height; on the right, the Partition tab with the eight shape cards, distribution presets and objectives" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width, with the Partition tab and the eight shape cards below it" width="180"/>
 
 
 ## Overview
