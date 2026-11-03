@@ -14,26 +14,34 @@ The project is a static web page: there is no build step, package manager or ser
 
 ## Usage
 
-- **Draw another polygon:** buttons `1`–`4` load the predefined polygons.
+The page has the polygon canvas on the left and two tabs on the right: **Settings & Stats** and **GA Simulation**.
+
+- **Draw another polygon:** buttons `1`–`4` under the canvas load the predefined polygons.
 - **Edit the polygon:** drag vertices or edges; hold `CTRL` and click to add a new vertex.
 - **Parcel distribution:** enter comma-separated weights (they are normalized automatically), or pick one of the presets `1`–`5`.
 - **Objectives:** checkboxes toggle the optional fitness terms (well-shaped rectangles, good circle-filled polygons, good aspect ratio, more convex polygons).
-- **Iterate:** runs the algorithm (keyboard: `0`; `1`–`9` re-runs a single pool). The *Best Item Statistics* panel shows the iteration number, the fitness value and the consistency scores of the best solution.
-- **GA Simulation:** tick *Simulate the genetic algorithm step by step* to watch every generation in four phases (tournament → mutation → evaluation → replacement).
-  - Use *Pause* / *Play* and *Step* to control it, and the slider to set the speed. *Step* also starts a run if none is active.
+- **Iterate:** runs the algorithm (keyboard: `0`; `1`–`9` re-runs a single pool). The *Best item statistics* section shows the iteration number, the fitness value and the consistency scores of the best solution.
+- **GA Simulation:** in the *GA Simulation* tab, tick *Simulate* to watch every generation in four phases (tournament → mutation → evaluation → replacement).
+  - Use *Play* / *Pause* and *Step* to control it, and the slider to set the speed. *Play* and *Step* also start a run if none is active.
   - The polygon canvas draws every individual's cut, with the lines in play highlighted. The panel lists the population (gene = cut angle, shown as a compass needle) with fitness bars and explains each phase.
   - Unticking the box finishes the current run at full speed.
+
+![GA simulation: the child cut (green) replaces the worst individual (dashed red)](images/simulation.png)
+
+*The simulation in the replacement phase: the child's cut (green) is better than the worst individual (dashed red), so it takes its place in the population.*
 
 ## Project Structure
 
 | Path | Purpose |
 |---|---|
-| `index.html` | UI: 500×500 canvas, polygon and distribution presets, objective checkboxes, *Iterate* button, statistics panel |
+| `index.html` | UI: 500×500 polygon canvas on the left; *Settings & Stats* and *GA Simulation* tabs on the right |
+| `css/shapes.css` | Page layout and styles |
 | `js/partitioning.js` | Main logic (loaded as PaperScript): interaction, geometry helpers, genetic algorithm, rendering |
 | `js/paper.js` | Vector graphics, path intersection/boolean operations, hit testing |
 | `js/numeric-1.2.6.min.js` | Covariance matrix and eigenvalue computations |
 | `js/nerdamer/` | Symbolic equation solving (circle through three points) |
-| `js/jquery-2.1.4.min.js`, `js/bootstrap.min.js`, `css/` | UI framework and styles |
+| `js/jquery-2.1.4.min.js`, `js/bootstrap.min.js`, `css/bootstrap.min.css` | UI framework (tabs, buttons) |
+| `images/` | Screenshots used in this README |
 
 ## Algorithm
 
