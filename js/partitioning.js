@@ -1,4 +1,117 @@
-var colors = ['#888888', '#AB0902', '#104C90', 'magenta', 'red', 'blue', 'yellow', 'purple', 'green', 'black'];
+var colors = ['#3b5bdb', '#e8590c', '#2b8a3e', '#c2255c', '#5f3dc4', '#0b7285', '#a61e4d', '#5c940d', '#d9480f', '#495057'];
+
+///////////////////////////////     GA settings     ///////////////////////////////////
+// Edited in the "GA Settings" tab and remembered in this browser.
+
+var CONFIG_DEFAULTS = {
+    perFrame: 10,       // generations computed per animation frame (fast mode)
+    frameDelay: 0,      // ms between frames (fast mode)
+    generations: 200,   // generations per pool
+    population: 10,     // individuals per pool
+    fineProb: 60,       // % fine rotation
+    fineRange: 5,       // +- degrees
+    coarseProb: 30,     // % coarse rotation (the rest jumps by 90/180/270 degrees)
+    coarseRange: 45,    // +- degrees
+    wRect: 0.25, wRatio: 0.005, wConvex: 0.1, wCircle: 0.3 // objective weights
+};
+var CONFIG_KEY = 'partitioning.config';
+
+var config = (function(){
+    var c = {}, saved = {};
+    for(var k in CONFIG_DEFAULTS)
+        c[k] = CONFIG_DEFAULTS[k];
+    try { saved = JSON.parse(window.localStorage.getItem(CONFIG_KEY) || '{}') || {}; } catch(e) {}
+    for(var k in saved)
+        if(k in CONFIG_DEFAULTS && typeof saved[k] == 'number' && isFinite(saved[k]))
+            c[k] = saved[k];
+    return c;
+})();
+
+function saveConfig(){
+    try { window.localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch(e) {}
+}
+
+function formatSetting(key, v){
+    if(key == 'frameDelay') return v + ' ms';
+    if(key == 'fineRange' || key == 'coarseRange') return '±' + v + '°';
+    if(key == 'fineProb' || key == 'coarseProb') return v + ' %';
+    return String(v);
+}
+
+function syncSettingsUI(){
+    var inputs = document.querySelectorAll('[data-setting]');
+    for(var i=0; i < inputs.length; i++){
+        var key = inputs[i].getAttribute('data-setting');
+        inputs[i].value = config[key];
+        var out = document.querySelector('output[data-for="' + key + '"]');
+        if(out)
+            out.textContent = formatSetting(key, config[key]);
+    }
+    var jump = document.getElementById('jump_prob');
+    if(jump)
+        jump.textContent = Math.max(0, 100 - config.fineProb - config.coarseProb) + ' %';
+}
+
+window.changeSetting = function(input){
+    var key = input.getAttribute('data-setting');
+    config[key] = parseFloat(input.value);
+    if(config.fineProb + config.coarseProb > 100){ // keep the mutation probabilities within 100 %
+        if(key == 'fineProb') config.coarseProb = 100 - config.fineProb;
+        else config.fineProb = 100 - config.coarseProb;
+    }
+    syncSettingsUI();
+    saveConfig();
+}
+
+window.resetSettings = function(){
+    for(var k in CONFIG_DEFAULTS)
+        config[k] = CONFIG_DEFAULTS[k];
+    syncSettingsUI();
+    saveConfig();
+}
+
+///////////////////////////////     presets     ///////////////////////////////////////
+
+var SHAPES = [
+    {name: 'Square',   points: [[100,100],[400,100],[400,400],[100,400]]},
+    {name: 'House',    points: [[100,200],[250,100],[400,200],[400,400],[100,400]]},
+    {name: 'Heptagon', points: [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[190.5,90],[257.5,57]]},
+    {name: 'Concave',  points: [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[287.5,222],[257.5,57]]}
+];
+var DIST_PRESETS = ['33,33,33', '50,33,17', '40,40,20', '50,30,10,10', '90,5,5'];
+
+function buildPresetPickers(){
+    var picker = document.getElementById('shape_picker');
+    if(picker){
+        var html = '';
+        for(var i=0; i < SHAPES.length; i++){
+            var pts = SHAPES[i].points.map(function(p){ return p[0] + ',' + p[1]; }).join(' ');
+            html += '<button type="button" class="shape-btn" data-shape="' + (i + 1) + '" onclick="createInitialPolygon(' + (i + 1) + ')" aria-label="Shape ' + (i + 1) + ': ' + SHAPES[i].name + '">'
+                  + '<svg viewBox="80 40 390 380" aria-hidden="true"><polygon points="' + pts + '"/></svg>'
+                  + '<span>' + SHAPES[i].name + '</span></button>';
+        }
+        picker.innerHTML = html;
+    }
+    var chips = document.getElementById('dist_presets');
+    if(chips){
+        var html = '';
+        for(var i=0; i < DIST_PRESETS.length; i++)
+            html += '<button type="button" class="chip" data-dist="' + DIST_PRESETS[i] + '" onclick="loadDistribution(' + (i + 1) + ')">' + DIST_PRESETS[i].split(',').join(' · ') + '</button>';
+        chips.innerHTML = html;
+    }
+}
+
+function markActive(selector, attr, value){
+    var items = document.querySelectorAll(selector);
+    for(var i=0; i < items.length; i++){
+        var on = items[i].getAttribute(attr) == value;
+        items[i].classList.toggle('active', on);
+        items[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+}
+
+buildPresetPickers();
+syncSettingsUI();
 var drawables = [];
 var myPath = [];
 var pools = [];
@@ -61,8 +174,12 @@ function onMouseDrag(event){
 }
 
 function onKeyDown(event){
-    
-    var asciiNum = event.key.charCodeAt(0) 
+
+    var focused = document.activeElement; // typing in a text field must not trigger the shortcuts
+    if(focused && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName) && focused.type != 'checkbox' && focused.type != 'range')
+        return;
+
+    var asciiNum = event.key.charCodeAt(0)
     if(asciiNum < 48 || asciiNum > 58) // check if they are a number
         return;
     
@@ -141,15 +258,8 @@ window.createInitialPolygon = function(t){
     }
 
     myPath = new Path({name: 'polygon', strokeColor: 'black', strokeWidth: 2, closed:true}); //  fillColor: 'white',
-    var polygon;
-    if(t == 1)
-        polygon =  [[100,100],[400,100],[400,400],[100,400]];
-    else if(t==2)
-        polygon = [[100,200], [250, 100], [400,200], [400,400],[100,400]];
-    else if(t==4)
-        polygon = [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[287.5,222],[257.5,57]];
-    else if(t==3)
-        polygon =  [[401.5,104],[450.5,246],[367.5,375],[236.5,335],[97.5,194],[190.5,90],[257.5,57]];
+    var polygon = SHAPES[t - 1].points;
+    markActive('.shape-btn', 'data-shape', String(t));
 
     for(var k=0; k < polygon.length; k++){
         myPath.add(new Point(polygon[k]));
@@ -189,20 +299,30 @@ drawCoordinateSystem();
 ///////////////////////////////   responsive canvas   ////////////////////////////////
 // The drawing keeps its 500x500 coordinate system; only the view is scaled to the space available.
 
-var WORLD_SIZE = 500, RIGHT_MIN = 440, PAGE_PAD = 16, COLUMN_GAP = 24, CANVAS_BORDER = 4;
+var WORLD_SIZE = 500, RIGHT_MIN = 440; // RIGHT_MIN matches the flex-basis of .app-right
+
+function px(style, prop){ return parseFloat(style[prop]) || 0; }
 
 function fitCanvas(){
-    var W = window.innerWidth, H = window.innerHeight;
-    var side = W - 2 * PAGE_PAD - COLUMN_GAP - RIGHT_MIN; // room for the canvas next to the tabs
+    var app = document.querySelector('.app'), as = getComputedStyle(app);
+    var card = document.querySelector('.canvas-card'), cs = getComputedStyle(card);
+    var inner = app.clientWidth - px(as, 'paddingLeft') - px(as, 'paddingRight');
+    var gap = px(as, 'columnGap') || 24;
+    var vs = getComputedStyle(view.element); // the canvas' own border
+    var chromeX = px(cs, 'paddingLeft') + px(cs, 'paddingRight') + px(cs, 'borderLeftWidth') + px(cs, 'borderRightWidth')
+                + px(vs, 'borderLeftWidth') + px(vs, 'borderRightWidth');
+    var side = inner - gap - RIGHT_MIN - chromeX; // room for the canvas next to the panel
     var size;
-    if(side >= 360){ // two columns: fill the height left under the header
+    if(side >= 340){ // two columns: fill the height left under the header
         var top = view.element.getBoundingClientRect().top + window.pageYOffset;
-        var presets = document.querySelector('.polygon-presets').offsetHeight + 12;
-        size = Math.min(side, H - top - presets);
+        var hint = document.querySelector('.canvas-hint'), hs = getComputedStyle(hint);
+        var below = hint.offsetHeight + px(hs, 'marginTop') + px(cs, 'paddingBottom') + px(cs, 'borderBottomWidth')
+                  + px(vs, 'borderTopWidth') + px(vs, 'borderBottomWidth') + 16;
+        size = Math.min(side, window.innerHeight - top - below);
     }
     else             // one column (phones, narrow windows): fill the width
-        size = W - 2 * PAGE_PAD;
-    size = Math.max(240, Math.floor(size - CANVAS_BORDER));
+        size = inner - chromeX;
+    size = Math.max(240, Math.floor(size));
 
     view.viewSize = new Size(size, size);
     view.zoom = size / WORLD_SIZE;
@@ -515,7 +635,6 @@ function rectanglityandConcavity(polygon){
 
 //////////////////////////////    Genetic Algorithm  Main  //////////////////////////////
 
-var POPULATION = 10, GENERATIONS = 200, PER_TICK = 10;
 
 function GenePool(p, d){
     if (typeof GenePool.id == 'undefined')
@@ -566,7 +685,7 @@ function GenePool(p, d){
 
     function initPopulation(){
         var base = getMainAngle(self.path).angle;
-        for(var j=0; j < POPULATION; j++){
+        for(var j=0; j < config.population; j++){
             var angle = base + 90 * (j % 4) + (j < 4 ? 0 : getRandomFloat(-45, 45));
             var line = new Line(((angle % 360) + 360) % 360);
             evaluate(line);
@@ -596,6 +715,7 @@ function GenePool(p, d){
             g.parent = g.a.fitnessValue >= g.b.fitnessValue ? g.a : g.b;
             g.phase = 'tournament';
             document.getElementById("info_iter").innerHTML = "Iteration no:  " + (pools.indexOf(self) + 1) + " - " + g.t;
+            updateProgress(self, g.t);
         }
         else if(g.phase == 'tournament'){       // mutation
             g.child = new Line(g.parent.angle);
@@ -625,7 +745,7 @@ function GenePool(p, d){
     }
 
     function finished(){
-        return atGenerationEnd() && (self.t >= GENERATIONS || self.lines[0].fitnessValue >= 0.9999);
+        return atGenerationEnd() && (self.t >= config.generations || self.lines[0].fitnessValue >= 0.9999);
     }
 
     function finish(){
@@ -650,7 +770,7 @@ function GenePool(p, d){
 
         while(!atGenerationEnd())               // complete a generation left over by the simulation
             runPhase();
-        for(var j=0; j < PER_TICK && !finished(); j++)
+        for(var j=0; j < config.perFrame && !finished(); j++)
             do { runPhase(); } while(!atGenerationEnd());
 
         updateBest();
@@ -659,7 +779,7 @@ function GenePool(p, d){
         if(finished())
             finish();
         else
-            window.setTimeout(tick, 0);
+            window.setTimeout(tick, config.frameDelay);
     }
 
     this.divide = function(onDone){
@@ -678,28 +798,29 @@ function GenePool(p, d){
     }
 };
 
-var areaWeight = 1, ratioWeight = 0.005, concavityWeight = 0.1, rectWeight = 0.25, circleWeight = 0.3;
+var areaWeight = 1; // the shape weights live in config (GA Settings tab)
 
 function shapePenalty(polygon, stats){ // weighted sum of the enabled shape objectives for one part
     var total = 0;
 
     if($('.good-aspect-ratio:checked').val()){
-        stats.ratio += ratioWeight * (aspectRatio(polygon) - 1);
-        total += ratioWeight * (aspectRatio(polygon) - 1);
+        var r = config.wRatio * (aspectRatio(polygon) - 1);
+        stats.ratio += r;
+        total += r;
     }
 
     var res = rectanglityandConcavity(polygon);
 
     if($('.well-shaped-rectangles:checked').val()){
-        stats.rect += rectWeight * res.diff;
-        total += rectWeight * res.diff;
+        stats.rect += config.wRect * res.diff;
+        total += config.wRect * res.diff;
     }
 
     if($('.convexity:checked').val())
-        total += concavityWeight * res.concave; // number of concave points
+        total += config.wConvex * res.concave; // number of concave points
 
     if($('.well-filled-circles:checked').val())
-        total += circleWeight * miniDisc(polygon).areaPenalty;
+        total += config.wCircle * miniDisc(polygon).areaPenalty;
 
     return total;
 }
@@ -737,13 +858,13 @@ function fitnessFunction(sides, dist, path, bothSides){
 }
 
 function mutation(line){
-    var rand = Math.random(), kind;
-    if(rand < 0.6){       // fine rotation of the separating line
-        line.angle += getRandomFloat(-5, 5);
+    var rand = 100 * Math.random(), kind;
+    if(rand < config.fineProb){                          // fine rotation of the separating line
+        line.angle += getRandomFloat(-config.fineRange, config.fineRange);
         kind = 'fine';
     }
-    else if(rand < 0.9){  // coarse rotation
-        line.angle += getRandomFloat(-45, 45);
+    else if(rand < config.fineProb + config.coarseProb){ // coarse rotation
+        line.angle += getRandomFloat(-config.coarseRange, config.coarseRange);
         kind = 'coarse';
     }
     else{                 // jump by 90, 180 or 270 degrees (180 swaps the two sides)
@@ -827,7 +948,11 @@ var SIM_COLORS = {contender: '#f0ad4e', parent: '#e8590c', child: '#1c7ed6', acc
 var SIM_PHASES = ['tournament', 'mutation', 'evaluation', 'replacement'];
 var SIM_CHIPS = {tournament: '1 Tournament', mutation: '2 Mutation', evaluation: '3 Evaluation', replacement: '4 Replacement'};
 var SIM_TITLES = {init: 'Initial population', tournament: '1. Tournament selection', mutation: '2. Mutation', evaluation: '3. Evaluation', replacement: '4. Replacement'};
-var MUTATION_TEXT = {fine: 'Fine rotation (±5°)', coarse: 'Coarse rotation (±45°)', jump: 'Jump by 90° / 180° / 270°'};
+function mutationText(kind){
+    if(kind == 'fine') return 'Fine rotation (±' + config.fineRange + '°)';
+    if(kind == 'coarse') return 'Coarse rotation (±' + config.coarseRange + '°)';
+    return 'Jump by 90° / 180° / 270°';
+}
 
 function fmtAngle(a){ return a.toFixed(1) + '°'; }
 function fmtFit(f){ return f.toFixed(4); }
@@ -835,11 +960,11 @@ function fmtFit(f){ return f.toFixed(4); }
 function simExplanation(pool, g){
     var lines = pool.lines;
     if(g.phase == 'init')
-        return 'Ten cut angles are created around the principal axis of the polygon. For every angle the cut offset is solved exactly, so the first part always gets ' + (100 * pool.dist[0]).toFixed(1) + '% of the area. Fitness only scores the shape of the parts.';
+        return pool.lines.length + ' cut angles are created around the principal axis of the polygon. For every angle the cut offset is solved exactly, so the first part always gets ' + (100 * pool.dist[0]).toFixed(1) + '% of the area. Fitness only scores the shape of the parts.';
     if(g.phase == 'tournament')
         return 'Two random individuals compete: ' + fmtAngle(g.a.angle) + ' (' + fmtFit(g.a.fitnessValue) + ') vs ' + fmtAngle(g.b.angle) + ' (' + fmtFit(g.b.fitnessValue) + '). The fitter one becomes the parent.';
     if(g.phase == 'mutation')
-        return MUTATION_TEXT[g.mutation] + ': the parent angle ' + fmtAngle(g.parent.angle) + ' becomes ' + fmtAngle(g.child.angle) + '. The cut is moved so that the area ratio stays exact.';
+        return mutationText(g.mutation) + ': the parent angle ' + fmtAngle(g.parent.angle) + ' becomes ' + fmtAngle(g.child.angle) + '. The cut is moved so that the area ratio stays exact.';
     if(g.phase == 'evaluation')
         return 'The child cut is scored: fitness = 1 − shape penalties = ' + fmtFit(g.child.fitnessValue) + '. The worst individual has ' + fmtFit(lines[lines.length - 1].fitnessValue) + '.';
     if(g.accepted)
@@ -956,7 +1081,7 @@ function drawSimulation(pool, g){
     var W = SIM_W;
     ctx.fillStyle = '#222';
     ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('Pool ' + (pools.indexOf(pool) + 1) + ' / ' + pools.length + '   ·   Generation ' + g.t + ' / ' + GENERATIONS, 6, 20);
+    ctx.fillText('Pool ' + (pools.indexOf(pool) + 1) + ' / ' + pools.length + '   ·   Generation ' + g.t + ' / ' + config.generations, 6, 20);
 
     var chipW = (W - 12) / 4;
     for(var c=0; c < SIM_PHASES.length; c++){
@@ -1032,7 +1157,15 @@ window.readDistAndNormalize = function(){
 
     dist = normalize(dist);
     generatePools(myPath);
-    //pools[0].dist = dist;
+    markActive('#dist_presets .chip', 'data-dist', document.getElementById("dist").value.replace(/\s+/g, ''));
+    resetProgress();
+}
+
+function resetProgress(){
+    var bar = document.getElementById('run_bar'), label = document.getElementById('run_label');
+    if(bar) bar.style.width = '0%';
+    if(label) label.textContent = 'Ready · ' + Math.max(0, dist.length - 1) + ' cuts × ' + config.generations + ' generations';
+    renderLegend([]);
 }
 window.readDistAndNormalize();
 
@@ -1052,9 +1185,29 @@ window.readDistAndNormalize();
 
 var running = false;
 
+function setRunning(on){
+    running = on;
+    var btn = document.getElementById('run');
+    if(btn){
+        btn.disabled = on;
+        btn.innerHTML = on ? 'Running…' : '▶ Iterate';
+    }
+    if(!on && pools.length && pools[pools.length - 1].bestSides){
+        document.getElementById('run_bar').style.width = '100%';
+        document.getElementById('run_label').textContent = 'Done · ' + pools.length + ' cuts';
+    }
+}
+
+function updateProgress(pool, t){
+    var i = pools.indexOf(pool), n = pools.length, G = config.generations;
+    var frac = (i + Math.min(t, G) / G) / n;
+    document.getElementById('run_bar').style.width = (100 * frac).toFixed(1) + '%';
+    document.getElementById('run_label').textContent = 'Cut ' + (i + 1) + ' / ' + n + ' · generation ' + t + ' / ' + G;
+}
+
 function runPool(num, chain){ // pool num cuts what the previous pool left over, then hands over to the next one
     if(num >= pools.length){
-        running = false;
+        setRunning(false);
         return;
     }
     if(num == 0)
@@ -1062,15 +1215,15 @@ function runPool(num, chain){ // pool num cuts what the previous pool left over,
     else if(pools[num-1].bestSides)
         pools[num].reset(pools[num-1].bestSides[1], normalize(pools[num-1].dist.slice(1)));
     else{
-        running = false;
+        setRunning(false);
         return;
     }
-    running = true;
+    setRunning(true);
     pools[num].divide(function(){
         if(chain)
             runPool(num + 1, true);
         else
-            running = false;
+            setRunning(false);
     });
 }
 
@@ -1085,38 +1238,71 @@ window.iterate = function(){
 window.show = function(){
     
     clear();
-    
-    if(pools.length == 0)
-        return;
 
+    var parts = [];
     function paint(s, color){
+        var pct = 100 * Math.abs(s.area / myPath.area);
         s.fillColor = color;
         s.bringToFront();
-        drawables.push(new PointText({ point: new Point(getPolygonCenter(s)) - [(s.strokeBounds.width/6), 0], fontSize: (s.strokeBounds.width/8)+'px', fillColor: 'white', content: ''+ (100 * Math.abs(s.area/myPath.area)).toFixed(2)}));
+        // label at the point inside the part that is farthest from its edges, sized to fit there
+        var spot = labelSpot(s);
+        var fontSize = Math.max(10, Math.min(44, spot.radius / 1.4));
+        drawables.push(new PointText({ point: spot.point + [0, fontSize / 3], justification: 'center', fontSize: fontSize + 'px', fontWeight: 'bold',
+                                       fillColor: 'white', strokeColor: 'rgba(0,0,0,0.35)', strokeWidth: 0.6, content: pct.toFixed(1) + '%'}));
+        parts.push({color: color, pct: pct});
     }
 
-    var k=0;
-    for(; k < pools.length; k++)
-        if(pools[k].bestSides)
-            paint(pools[k].bestSides[0], colors[k]);
+    if(pools.length){
+        var k=0;
+        for(; k < pools.length; k++)
+            if(pools[k].bestSides)
+                paint(pools[k].bestSides[0], colors[k]);
 
-    if(pools[k-1].bestSides)
-        paint(pools[k-1].bestSides[1], colors[k]);
+        if(pools[k-1].bestSides)
+            paint(pools[k-1].bestSides[1], colors[k]);
+    }
+    renderLegend(parts);
+}
+
+function labelSpot(part){ // approximate pole of inaccessibility: grid search, then a finer search around the best cell
+    var b = part.bounds, best = {point: b.center, radius: 0};
+    function probe(p){
+        if(!part.contains(p))
+            return;
+        var r = p.getDistance(part.getNearestPoint(p));
+        if(r > best.radius)
+            best = {point: p, radius: r};
+    }
+    var n = 12, dx = b.width / n, dy = b.height / n;
+    for(var i=0; i < n; i++)
+        for(var j=0; j < n; j++)
+            probe(new Point(b.x + (i + 0.5) * dx, b.y + (j + 0.5) * dy));
+    var c = best.point;
+    for(var i=-2; i <= 2; i++)
+        for(var j=-2; j <= 2; j++)
+            probe(c + [i * dx / 4, j * dy / 4]);
+    return best;
+}
+
+function renderLegend(parts){
+    var el = document.getElementById('result_legend');
+    if(!el)
+        return;
+    if(!parts.length){
+        el.innerHTML = '<span class="hint">Press Iterate to partition the polygon.</span>';
+        return;
+    }
+    var html = '';
+    for(var i=0; i < parts.length; i++)
+        html += '<span class="legend-item"><i style="background:' + parts[i].color + '"></i>' + parts[i].pct.toFixed(1) + ' %'
+              + (dist[i] !== undefined ? '<small>target ' + (100 * dist[i]).toFixed(1) + ' %</small>' : '') + '</span>';
+    el.innerHTML = html;
 }
 
 window.loadDistribution = function(i){
     
-    if(i == 1)
-        document.getElementById("dist").value= '33,33,33';
-    else if(i == 2)
-        document.getElementById("dist").value= '50,33,17';
-    else if(i == 3)
-        document.getElementById("dist").value= '40,40,20';
-    else if(i == 4)
-        document.getElementById("dist").value= '50,30,10,10';
-    else if(i == 5)
-        document.getElementById("dist").value= '90,5,5';
-    
+    document.getElementById("dist").value = DIST_PRESETS[i - 1];
+
     window.readDistAndNormalize();
 }
     
