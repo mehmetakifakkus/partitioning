@@ -23,7 +23,7 @@ function onMouseDown(event){
 
     segment = path = stroke = null;
     
-	var hitResult = project.hitTest(event.point, hitOptions);        
+    var hitResult = myPath.hitTest(event.point, hitOptions); // only the polygon, not the vertex markers drawn on top of it
 
     if (hitResult) {
         console.log(hitResult.type)
@@ -185,6 +185,37 @@ function drawCoordinateSystem(){
     }
 }
 drawCoordinateSystem();
+
+///////////////////////////////   responsive canvas   ////////////////////////////////
+// The drawing keeps its 500x500 coordinate system; only the view is scaled to the space available.
+
+var WORLD_SIZE = 500, RIGHT_MIN = 440, PAGE_PAD = 16, COLUMN_GAP = 24, CANVAS_BORDER = 4;
+
+function fitCanvas(){
+    var W = window.innerWidth, H = window.innerHeight;
+    var side = W - 2 * PAGE_PAD - COLUMN_GAP - RIGHT_MIN; // room for the canvas next to the tabs
+    var size;
+    if(side >= 360){ // two columns: fill the height left under the header
+        var top = view.element.getBoundingClientRect().top + window.pageYOffset;
+        var presets = document.querySelector('.polygon-presets').offsetHeight + 12;
+        size = Math.min(side, H - top - presets);
+    }
+    else             // one column (phones, narrow windows): fill the width
+        size = W - 2 * PAGE_PAD;
+    size = Math.max(240, Math.floor(size - CANVAS_BORDER));
+
+    view.viewSize = new Size(size, size);
+    view.zoom = size / WORLD_SIZE;
+    view.center = new Point(WORLD_SIZE / 2, WORLD_SIZE / 2);
+}
+fitCanvas();
+window.addEventListener('resize', function(){
+    fitCanvas();
+    if(sim.lastPool && sim.enabled){ // re-layout the panel
+        window.show();
+        drawSimulation(sim.lastPool, sim.lastGen);
+    }
+});
 
 ////////////////////////////////////////    Main   //////////////////////////////////
 
@@ -726,7 +757,7 @@ function mutation(line){
 
 ////////////////////////////   GA simulation  ////////////////////////////////////////
 
-var sim = {enabled: false, playing: true, delay: 700, timer: null, next: null};
+var sim = {enabled: false, playing: true, delay: 700, timer: null, next: null, lastPool: null, lastGen: null};
 
 function simSchedule(fn){ // run fn after the frame delay, or when Step / Play is pressed
     sim.next = fn;
@@ -832,7 +863,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight){
 }
 
 function drawGeneRow(ctx, y, label, line, background, status){
-    var W = ctx.canvas.width;
+    var W = SIM_W;
     if(background){
         ctx.fillStyle = background;
         ctx.fillRect(0, y - 10, W, 20);
@@ -869,9 +900,28 @@ function drawGeneRow(ctx, y, label, line, background, status){
     }
 }
 
-function drawSimulation(pool, g){
+var SIM_W = 460, SIM_H = 430; // layout size of the panel; it is scaled to the space available
+
+function prepareSimCanvas(){
     var canvas = document.getElementById("simCanvas"), ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var avail = canvas.parentNode.clientWidth || SIM_W;
+    var k = Math.min(avail / SIM_W, 1.5);
+    var top = canvas.getBoundingClientRect().top;
+    if(window.innerWidth >= 900 && top > 0) // two columns: also fit the height of the window
+        k = Math.max(0.7, Math.min(k, (window.innerHeight - top - 8) / SIM_H));
+    var dpr = window.devicePixelRatio || 1;
+    canvas.style.width = Math.round(SIM_W * k) + 'px';
+    canvas.style.height = Math.round(SIM_H * k) + 'px';
+    canvas.width = Math.round(SIM_W * k * dpr);
+    canvas.height = Math.round(SIM_H * k * dpr);
+    ctx.setTransform(k * dpr, 0, 0, k * dpr, 0, 0);
+    return ctx;
+}
+
+function drawSimulation(pool, g){
+    sim.lastPool = pool;
+    sim.lastGen = g;
+    var ctx = prepareSimCanvas();
     if(!pool || !sim.enabled)
         return;
 
@@ -903,7 +953,7 @@ function drawSimulation(pool, g){
     }
 
     // ----- panel: header, phase chips, explanation
-    var W = canvas.width;
+    var W = SIM_W;
     ctx.fillStyle = '#222';
     ctx.font = 'bold 15px sans-serif';
     ctx.fillText('Pool ' + (pools.indexOf(pool) + 1) + ' / ' + pools.length + '   ·   Generation ' + g.t + ' / ' + GENERATIONS, 6, 20);

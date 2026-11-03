@@ -14,7 +14,7 @@ The project is a static web page: there is no build step, package manager or ser
 
 ## Usage
 
-The page has the polygon canvas on the left and two tabs on the right: **Settings & Stats** and **GA Simulation**.
+The page has the polygon canvas on the left and two tabs on the right: **Settings & Stats** and **GA Simulation**. The canvas scales to fill the window (it keeps its 500 × 500 coordinate system); on phones and narrow windows the tabs move below it, and the polygon can be edited by touch.
 
 - **Draw another polygon:** buttons `1`–`4` under the canvas load the predefined polygons.
 - **Edit the polygon:** drag vertices or edges; hold `CTRL` and click to add a new vertex.
@@ -26,9 +26,9 @@ The page has the polygon canvas on the left and two tabs on the right: **Setting
   - The polygon canvas draws every individual's cut, with the lines in play highlighted. The panel lists the population (gene = cut angle, shown as a compass needle) with fitness bars and explains each phase.
   - Unticking the box finishes the current run at full speed.
 
-![GA simulation: the child cut (green) replaces the worst individual (dashed red)](images/simulation.png)
+![GA simulation: the child's cut (blue) is evaluated against the population](images/simulation.png)
 
-*The simulation in the replacement phase: the child's cut (green) is better than the worst individual (dashed red), so it takes its place in the population.*
+*The simulation in the evaluation phase: the child's cut (blue) gives the shaded part exactly 50 % of the area and is scored; the panel compares it with the population, sorted by fitness.*
 
 ## Project Structure
 
