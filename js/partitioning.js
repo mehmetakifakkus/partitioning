@@ -1,4 +1,19 @@
 var colors = ['#3b5bdb', '#e8590c', '#2b8a3e', '#c2255c', '#5f3dc4', '#0b7285', '#a61e4d', '#5c940d', '#d9480f', '#495057'];
+var MAX_PARTS = colors.length, MIN_PARTS = 2;
+
+function themeColor(name, fallback){ // a colour from the CSS theme (light or dark)
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#1f2328';
+}
+function isDark(){
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+function loadFlag(key, fallback){
+    try { var v = window.localStorage.getItem(key); return v === null ? fallback : v === '1'; } catch(e) { return fallback; }
+}
+function saveFlag(key, on){
+    try { window.localStorage.setItem(key, on ? '1' : '0'); } catch(e) {}
+}
 
 ///////////////////////////////     GA settings     ///////////////////////////////////
 // Edited in the "GA Settings" tab and remembered in this browser.
@@ -190,6 +205,11 @@ function onKeyDown(event){
     if(focused && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName) && focused.type != 'checkbox' && focused.type != 'range')
         return;
 
+    if(event.key == 'escape'){
+        window.stopRun();
+        return;
+    }
+
     var asciiNum = event.key.charCodeAt(0)
     if(asciiNum < 48 || asciiNum > 58) // check if they are a number
         return;
@@ -215,8 +235,9 @@ function PolygonPoint(p){
     this.point = p;
     
     this.draw = function(){
-        drawables.push(new PointText({ point: p + [5, -5], fontSize: '16px', fillColor: 'black', content: ' '+ this.id}));  
-        drawables.push(new Path.Circle({ name: 'vertice-'+i, center: p, radius: 5, fillColor: 'black'}));
+        var ink = themeColor('--outline');
+        drawables.push(new PointText({ point: p + [5, -5], fontSize: '16px', fillColor: ink, content: ' '+ this.id}));
+        drawables.push(new Path.Circle({ name: 'vertice-'+i, center: p, radius: 5, fillColor: ink}));
     }
 };
 
@@ -262,13 +283,18 @@ function refreshPoints(){
        points[k].draw(); 
 }
 
-window.createInitialPolygon = function(t){ 
+var currentShape = 2;
+
+window.createInitialPolygon = function(t){
+    if(running)
+        window.stopRun();
+    currentShape = t;
     if(myPath.name){
         points = [];
         myPath.remove();
     }
 
-    myPath = new Path({name: 'polygon', strokeColor: 'black', strokeWidth: 2, closed:true}); //  fillColor: 'white',
+    myPath = new Path({name: 'polygon', strokeColor: themeColor('--outline'), strokeWidth: 2, closed:true});
     var polygon = SHAPES[t - 1].points;
     markActive('.shape-btn', 'data-shape', String(t));
 
@@ -278,6 +304,10 @@ window.createInitialPolygon = function(t){
     }
     refreshPoints();
     generatePools(myPath);
+    if(typeof window.show == 'function'){ // clear an old result (window.show exists after start-up)
+        window.show();
+        resetProgress();
+    }
 }
 
 function drawCircle(circle){
@@ -290,50 +320,74 @@ function convertToRealCoord(p){
     temp.y = 500 - temp.y;
     return temp;
 }
+var gridItems = [], gridOn = loadFlag('partitioning.grid', true);
+
 function drawCoordinateSystem(){
-    
+    var ink = themeColor('--grid');
+    function add(item){ item.visible = gridOn; gridItems.push(item); }
+
     for(var i = 0; i <= 11; i++){
-        new PointText({point: convertToRealCoord(new Point(0, 2*i)) + [3, +3], fontSize: '12px', fillColor: 'black', content: ' '+i*50, opacity: 0.6});  
-        new PointText({point: convertToRealCoord(new Point(2*i, 0)) + [-13, -2], fontSize: '12px', fillColor: 'black', content: ' '+i*50, opacity: 0.6});  
+        add(new PointText({point: convertToRealCoord(new Point(0, 2*i)) + [3, +3], fontSize: '12px', fillColor: ink, content: ' '+i*50, opacity: 0.6}));
+        add(new PointText({point: convertToRealCoord(new Point(2*i, 0)) + [-13, -2], fontSize: '12px', fillColor: ink, content: ' '+i*50, opacity: 0.6}));
     }
     for(var  i = 0; i <= 21; i++){
-        new Path.Line({from: convertToRealCoord(new Point(0, i)), to: convertToRealCoord(new Point(21, i)), strokeColor:'black', strokeWidth: 1, dashArray: [1,2], opacity: 0.2})
-        new Path.Line({from: convertToRealCoord(new Point(0, i)), to: convertToRealCoord(new Point(0.2, i)), strokeColor:'black', strokeWidth: 4, opacity: 0.5})
+        add(new Path.Line({from: convertToRealCoord(new Point(0, i)), to: convertToRealCoord(new Point(21, i)), strokeColor: ink, strokeWidth: 1, dashArray: [1,2], opacity: 0.2}));
+        add(new Path.Line({from: convertToRealCoord(new Point(0, i)), to: convertToRealCoord(new Point(0.2, i)), strokeColor: ink, strokeWidth: 4, opacity: 0.5}));
     }
     for(var i = 0; i <= 21; i++){
-       new Path.Line({from: convertToRealCoord(new Point(i, 0)), to: convertToRealCoord(new Point(i, 21)), strokeColor:'black', strokeWidth: 1, dashArray: [1,2], opacity: 0.2})  
-       new Path.Line({from: convertToRealCoord(new Point(i, -0.2)), to: convertToRealCoord(new Point(i, 0)), strokeColor:'black', strokeWidth: 4, opacity: 0.5})
+       add(new Path.Line({from: convertToRealCoord(new Point(i, 0)), to: convertToRealCoord(new Point(i, 21)), strokeColor: ink, strokeWidth: 1, dashArray: [1,2], opacity: 0.2}));
+       add(new Path.Line({from: convertToRealCoord(new Point(i, -0.2)), to: convertToRealCoord(new Point(i, 0)), strokeColor: ink, strokeWidth: 4, opacity: 0.5}));
     }
 }
 drawCoordinateSystem();
 
+window.toggleGrid = function(){
+    gridOn = !gridOn;
+    for(var i=0; i < gridItems.length; i++)
+        gridItems[i].visible = gridOn;
+    saveFlag('partitioning.grid', gridOn);
+    syncGridButton();
+}
+function syncGridButton(){
+    var b = document.getElementById('grid_toggle');
+    if(b) b.setAttribute('aria-pressed', gridOn ? 'true' : 'false');
+}
+syncGridButton();
+
+function applyTheme(){ // the OS switched between light and dark: recolour what is drawn on the canvases
+    var ink = themeColor('--grid');
+    for(var i=0; i < gridItems.length; i++){
+        if(gridItems[i].className == 'PointText') gridItems[i].fillColor = ink;
+        else gridItems[i].strokeColor = ink;
+    }
+    if(myPath.name)
+        myPath.strokeColor = themeColor('--outline');
+    refreshPoints();
+    window.show();
+    if(sim.lastPool && sim.enabled)
+        drawSimulation(sim.lastPool, sim.lastGen);
+}
+if(window.matchMedia){
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    if(darkQuery.addEventListener) darkQuery.addEventListener('change', applyTheme);
+    else if(darkQuery.addListener) darkQuery.addListener(applyTheme);
+}
+
 ///////////////////////////////   responsive canvas   ////////////////////////////////
 // The drawing keeps its 500x500 coordinate system; only the view is scaled to the space available.
 
-var WORLD_SIZE = 500, RIGHT_MIN = 440; // RIGHT_MIN matches the flex-basis of .app-right
+var WORLD_SIZE = 500;
+var STACKED_QUERY = '(max-width: 820px)'; // matches the CSS breakpoint where the panel moves below the canvas
 
 function px(style, prop){ return parseFloat(style[prop]) || 0; }
 
-function fitCanvas(){
-    var app = document.querySelector('.app'), as = getComputedStyle(app);
-    var card = document.querySelector('.canvas-card'), cs = getComputedStyle(card);
-    var inner = app.clientWidth - px(as, 'paddingLeft') - px(as, 'paddingRight');
-    var gap = px(as, 'columnGap') || 24;
-    var vs = getComputedStyle(view.element); // the canvas' own border
-    var chromeX = px(cs, 'paddingLeft') + px(cs, 'paddingRight') + px(cs, 'borderLeftWidth') + px(cs, 'borderRightWidth')
-                + px(vs, 'borderLeftWidth') + px(vs, 'borderRightWidth');
-    var side = inner - gap - RIGHT_MIN - chromeX; // room for the canvas next to the panel
-    var size;
-    if(side >= 340){ // two columns: fill the height left under the header
-        var top = view.element.getBoundingClientRect().top + window.pageYOffset;
-        var hint = document.querySelector('.canvas-hint'), hs = getComputedStyle(hint);
-        var below = hint.offsetHeight + px(hs, 'marginTop') + px(cs, 'paddingBottom') + px(cs, 'borderBottomWidth')
-                  + px(vs, 'borderTopWidth') + px(vs, 'borderBottomWidth') + 16;
-        size = Math.min(side, window.innerHeight - top - below);
-    }
-    else             // one column (phones, narrow windows): fill the width
-        size = inner - chromeX;
-    size = Math.max(240, Math.floor(size));
+function fitCanvas(){ // the canvas fills the stage (as a square); on phones it fills the width
+    var stage = document.getElementById('stage'), ss = getComputedStyle(stage);
+    var w = stage.clientWidth - px(ss, 'paddingLeft') - px(ss, 'paddingRight');
+    var size = w;
+    if(!window.matchMedia(STACKED_QUERY).matches)
+        size = Math.min(w, stage.clientHeight - px(ss, 'paddingTop') - px(ss, 'paddingBottom'));
+    size = Math.max(200, Math.floor(size));
 
     view.viewSize = new Size(size, size);
     view.zoom = size / WORLD_SIZE;
@@ -347,6 +401,28 @@ window.addEventListener('resize', function(){
         drawSimulation(sim.lastPool, sim.lastGen);
     }
 });
+
+//////////////////////////////////////////    tabs   //////////////////////////////////
+
+window.showTab = function(id){
+    var tabs = document.querySelectorAll('.tab'), panes = document.querySelectorAll('.tab-pane');
+    for(var i=0; i < tabs.length; i++){
+        var on = tabs[i].getAttribute('data-tab') == id;
+        tabs[i].classList.toggle('active', on);
+        tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    for(var i=0; i < panes.length; i++)
+        panes[i].classList.toggle('active', panes[i].id == id);
+    // the simulation panel needs a wider sidebar; refit the canvas once the column has resized
+    document.getElementById('app').classList.toggle('wide-side', id == 'tab_sim');
+    window.setTimeout(function(){
+        fitCanvas();
+        if(sim.lastPool && sim.enabled){
+            window.show();
+            drawSimulation(sim.lastPool, sim.lastGen);
+        }
+    }, 230);
+}
 
 ////////////////////////////////////////    Main   //////////////////////////////////
 
@@ -768,7 +844,22 @@ function GenePool(p, d){
             self.onDone();
     }
 
+    this.halt = function(){ // Stop: keep the best cut found so far and end the run
+        window.clearTimeout(self.timer);
+        self.gen = null;
+        if(self.lines.length)
+            updateBest();
+        stopRequested = false;
+        window.show();
+        drawSimulation(null);
+        setRunning(false, {cut: pools.indexOf(self) + 1, t: self.t});
+    }
+
     function tick(){
+        if(stopRequested){
+            self.halt();
+            return;
+        }
         if(sim.enabled){                        // one phase per frame
             var g = runPhase();
             if(g.phase == 'replacement')
@@ -790,11 +881,12 @@ function GenePool(p, d){
         if(finished())
             finish();
         else
-            window.setTimeout(tick, config.frameDelay);
+            self.timer = window.setTimeout(tick, config.frameDelay);
     }
 
     this.divide = function(onDone){
         self.onDone = onDone;
+        activePool = self;
         if(self.lines.length == 0){
             initPopulation();
             updateBest();
@@ -1004,30 +1096,31 @@ function drawGeneRow(ctx, y, label, line, background, status){
         ctx.fillStyle = background;
         ctx.fillRect(0, y - 10, W, 20);
     }
-    ctx.fillStyle = '#333';
+    var T = simTheme();
+    ctx.fillStyle = T.text;
     ctx.font = '13px sans-serif';
     ctx.fillText(label, 6, y + 4);
 
     // compass needle showing the gene (cut direction)
     var cx = 62, r = 8, rad = line.angle * Math.PI / 180;
-    ctx.strokeStyle = '#999';
+    ctx.strokeStyle = T.ring;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx, y, r, 0, 2 * Math.PI); ctx.stroke();
-    ctx.strokeStyle = '#222';
+    ctx.strokeStyle = T.text;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(cx - r * Math.cos(rad), y - r * Math.sin(rad)); ctx.lineTo(cx + r * Math.cos(rad), y + r * Math.sin(rad)); ctx.stroke();
 
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = T.text;
     ctx.fillText(fmtAngle(line.angle), 82, y + 4);
 
     // fitness bar
     var bx = 140, bw = W - bx - 128;
-    ctx.fillStyle = '#e9ecef';
+    ctx.fillStyle = T.track;
     ctx.fillRect(bx, y - 7, bw, 14);
     if(status != 'unscored'){
-        ctx.fillStyle = '#495057';
+        ctx.fillStyle = T.bar;
         ctx.fillRect(bx, y - 7, bw * Math.max(0, Math.min(1, line.fitnessValue)), 14);
-        ctx.fillStyle = '#333';
+        ctx.fillStyle = T.text;
         ctx.fillText(fmtFit(line.fitnessValue), bx + bw + 8, y + 4);
     }
     if(status && status != 'unscored'){
@@ -1038,12 +1131,20 @@ function drawGeneRow(ctx, y, label, line, background, status){
 
 var SIM_W = 460, SIM_H = 430; // layout size of the panel; it is scaled to the space available
 
+function simTheme(){
+    return isDark()
+        ? {text: '#e6e8eb', muted: '#9aa1ad', chip: '#2d323c', chipOn: '#f76707', track: '#2d323c', bar: '#9aa1ad', ring: '#6b7280',
+           tour: 'rgba(250,176,5,.18)', parent: 'rgba(253,126,20,.24)', fresh: 'rgba(64,192,87,.22)', child: 'rgba(116,143,252,.22)', bad: 'rgba(255,107,107,.2)'}
+        : {text: '#222222', muted: '#868e96', chip: '#f1f3f5', chipOn: '#f0ad4e', track: '#e9ecef', bar: '#495057', ring: '#999999',
+           tour: '#fff3bf', parent: '#ffd8a8', fresh: '#d3f9d8', child: '#d0ebff', bad: '#ffe3e3'};
+}
+
 function prepareSimCanvas(){
     var canvas = document.getElementById("simCanvas"), ctx = canvas.getContext('2d');
     var avail = canvas.parentNode.clientWidth || SIM_W;
     var k = Math.min(avail / SIM_W, 1.5);
     var top = canvas.getBoundingClientRect().top;
-    if(window.innerWidth >= 900 && top > 0) // two columns: also fit the height of the window
+    if(!window.matchMedia(STACKED_QUERY).matches && top > 0) // two columns: also fit the height of the window
         k = Math.max(0.7, Math.min(k, (window.innerHeight - top - 8) / SIM_H));
     var dpr = window.devicePixelRatio || 1;
     canvas.style.width = Math.round(SIM_W * k) + 'px';
@@ -1063,8 +1164,9 @@ function drawSimulation(pool, g){
 
     // ----- main canvas: every individual's cut, with the ones in play highlighted
     var path = pool.path;
+    var T = simTheme();
     for(var k=0; k < pool.lines.length; k++)
-        drawCutLine(path, pool.lines[k], {strokeColor: 'black', strokeWidth: 1, opacity: 0.3});
+        drawCutLine(path, pool.lines[k], {strokeColor: themeColor('--outline'), strokeWidth: 1, opacity: 0.3});
 
     if(g.phase == 'tournament'){
         drawCutLine(path, g.a, {strokeColor: SIM_COLORS.contender, strokeWidth: 3});
@@ -1090,21 +1192,21 @@ function drawSimulation(pool, g){
 
     // ----- panel: header, phase chips, explanation
     var W = SIM_W;
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = T.text;
     ctx.font = 'bold 15px sans-serif';
     ctx.fillText('Pool ' + (pools.indexOf(pool) + 1) + ' / ' + pools.length + '   ·   Generation ' + g.t + ' / ' + config.generations, 6, 20);
 
     var chipW = (W - 12) / 4;
     for(var c=0; c < SIM_PHASES.length; c++){
         var active = SIM_PHASES[c] == g.phase;
-        ctx.fillStyle = active ? '#f0ad4e' : '#f1f3f5';
+        ctx.fillStyle = active ? T.chipOn : T.chip;
         ctx.fillRect(6 + c * chipW, 32, chipW - 6, 24);
-        ctx.fillStyle = active ? '#fff' : '#868e96';
+        ctx.fillStyle = active ? '#fff' : T.muted;
         ctx.font = (active ? 'bold ' : '') + '12px sans-serif';
         ctx.fillText(SIM_CHIPS[SIM_PHASES[c]], 12 + c * chipW, 48);
     }
 
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = T.text;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText(SIM_TITLES[g.phase], 6, 76);
     ctx.font = '13px sans-serif';
@@ -1113,20 +1215,20 @@ function drawSimulation(pool, g){
     // ----- population, sorted by fitness
     var y0 = 172, rowH = 21;
     ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = '#868e96';
+    ctx.fillStyle = T.muted;
     ctx.fillText('Population (gene = cut angle), sorted by fitness', 6, y0 - 20);
     for(var k=0; k < pool.lines.length; k++){
         var line = pool.lines[k], bg = null, status = '';
         if(g.phase == 'tournament' && (line == g.a || line == g.b))
-            bg = '#fff3bf';
+            bg = T.tour;
         if((g.phase == 'tournament' || g.phase == 'mutation') && line == g.parent){
-            bg = '#ffd8a8';
+            bg = T.parent;
             status = 'parent';
         }
         if(g.phase == 'evaluation' && k == pool.lines.length - 1)
             status = 'worst';
         if(g.phase == 'replacement' && g.accepted && line == g.child){
-            bg = '#d3f9d8';
+            bg = T.fresh;
             status = 'new';
         }
         drawGeneRow(ctx, y0 + k * rowH, '#' + (k + 1), line, bg, status);
@@ -1136,7 +1238,7 @@ function drawSimulation(pool, g){
     var yc = y0 + pool.lines.length * rowH + 12;
     if(g.child){
         var scored = g.phase == 'evaluation' || g.phase == 'replacement';
-        var bgc = g.phase == 'replacement' ? (g.accepted ? '#d3f9d8' : '#ffe3e3') : '#d0ebff';
+        var bgc = g.phase == 'replacement' ? (g.accepted ? T.fresh : T.bad) : T.child;
         drawGeneRow(ctx, yc, 'child', g.child, bgc, scored ? (g.phase == 'replacement' ? (g.accepted ? 'kept' : 'discarded') : '') : 'unscored');
     }
     if(g.phase == 'replacement' && g.accepted){
@@ -1158,18 +1260,82 @@ function generatePools(path){
 
 }
 
-window.readDistAndNormalize = function(){
+// The parts are cut largest first (dist is sorted), but every part keeps the colour of its row
+// in the distribution editor: distOrder[k] is the row of the k-th largest part.
+var weights = [], distOrder = [];
 
-    dist = document.getElementById("dist").value;
-    dist = dist.split(",");
+function partColor(k){
+    return colors[(distOrder[k] === undefined ? k : distOrder[k]) % colors.length];
+}
 
-    for(i=0; i < dist.length; i++)
-        dist[i] = parseFloat(dist[i]);
+function parseWeights(text){
+    return text.split(',').map(function(v){ return parseFloat(v); }).filter(function(v){ return isFinite(v) && v > 0; });
+}
 
-    dist = normalize(dist);
+function applyWeights(rerenderRows){
+    if(running)
+        window.stopRun();
+    var total = weights.reduce(function(a, b){ return a + b; }, 0);
+    distOrder = weights.map(function(w, i){ return i; });
+    distOrder.sort(function(a, b){ return weights[b] - weights[a] || a - b; });
+    dist = distOrder.map(function(i){ return weights[i] / total; });
     generatePools(myPath);
-    markActive('#dist_presets .chip', 'data-dist', document.getElementById("dist").value.replace(/\s+/g, ''));
+    if(typeof window.show == 'function')
+        window.show();
+    var text = weights.map(function(w){ return Math.round(w * 100) / 100; }).join(',');
+    document.getElementById("dist").value = text;
+    markActive('#dist_presets .chip', 'data-dist', text);
+    renderDistEditor(rerenderRows);
     resetProgress();
+}
+
+window.readDistAndNormalize = function(){
+    var parsed = parseWeights(document.getElementById("dist").value);
+    if(parsed.length < 1)
+        parsed = weights.length ? weights.slice() : [50, 30, 10, 10];
+    weights = parsed.slice(0, MAX_PARTS);
+    applyWeights(true);
+}
+
+function renderDistEditor(rerenderRows){
+    var total = weights.reduce(function(a, b){ return a + b; }, 0);
+    var stack = document.getElementById('dist_stack'), rows = document.getElementById('dist_rows');
+    if(!stack || !rows)
+        return;
+    stack.innerHTML = weights.map(function(w, i){
+        return '<i style="flex-grow:' + w + ';background:' + colors[i % colors.length] + '"></i>'; }).join('');
+    if(rerenderRows || rows.children.length != weights.length){
+        var max = Math.max(100, Math.ceil(Math.max.apply(null, weights)));
+        rows.innerHTML = weights.map(function(w, i){
+            return '<div class="part-row">'
+                 + '<span class="swatch" style="background:' + colors[i % colors.length] + '"></span>'
+                 + '<input type="range" style="accent-color:' + colors[i % colors.length] + '" min="1" max="' + max + '" step="1" value="' + Math.round(w) + '" aria-label="Weight of part ' + (i + 1) + '" oninput="window.setWeight(' + i + ', this.value)">'
+                 + '<span class="part-pct" data-part="' + i + '"></span>'
+                 + '<button type="button" class="part-remove" onclick="window.removePart(' + i + ')" aria-label="Remove part ' + (i + 1) + '"' + (weights.length <= MIN_PARTS ? ' disabled' : '') + '>&times;</button>'
+                 + '</div>'; }).join('');
+    }
+    var pcts = rows.querySelectorAll('.part-pct');
+    for(var i=0; i < pcts.length; i++)
+        pcts[i].textContent = (100 * weights[i] / total).toFixed(weights.length > 6 ? 0 : 1) + ' %';
+    document.getElementById('dist_count').textContent = weights.length + ' parts';
+    document.getElementById('dist_add').disabled = weights.length >= MAX_PARTS;
+}
+
+window.setWeight = function(i, v){
+    weights[i] = Math.max(1, parseFloat(v));
+    applyWeights(false); // keep the slider that is being dragged
+}
+window.addPart = function(){
+    if(weights.length >= MAX_PARTS)
+        return;
+    weights.push(Math.max(1, Math.round(Math.min.apply(null, weights))));
+    applyWeights(true);
+}
+window.removePart = function(i){
+    if(weights.length <= MIN_PARTS)
+        return;
+    weights.splice(i, 1);
+    applyWeights(true);
 }
 
 function resetProgress(){
@@ -1194,19 +1360,58 @@ window.readDistAndNormalize();
 //    }
 
 
-var running = false;
+var running = false, stopRequested = false, activePool = null;
 
-function setRunning(on){
+function setRunning(on, stopped){
     running = on;
-    var btn = document.getElementById('run');
+    var btn = document.getElementById('run'), stop = document.getElementById('stop');
     if(btn){
         btn.disabled = on;
-        btn.innerHTML = on ? 'Running…' : '▶ Iterate';
+        btn.querySelector('.lbl').textContent = on ? 'Running…' : 'Iterate';
     }
-    if(!on && pools.length && pools[pools.length - 1].bestSides){
+    if(stop)
+        stop.disabled = !on;
+    if(on)
+        return;
+    activePool = null;
+    if(stopped)
+        document.getElementById('run_label').textContent = 'Stopped at cut ' + stopped.cut + ' / ' + pools.length + ' · generation ' + stopped.t;
+    else if(pools.length && pools[pools.length - 1].bestSides){
         document.getElementById('run_bar').style.width = '100%';
         document.getElementById('run_label').textContent = 'Done · ' + pools.length + ' cuts';
     }
+}
+
+window.stopRun = function(){ // ends the run right away; the best cuts found so far stay on the canvas
+    if(!running)
+        return;
+    window.clearTimeout(sim.timer); // the simulation may be waiting for its next frame
+    sim.timer = null;
+    sim.next = null;
+    if(activePool)
+        activePool.halt();   // cancels the pool's pending frame
+    else
+        stopRequested = true; // checked by the next frame
+}
+
+window.resetShape = function(){ // back to the selected shape without edits, and no result
+    createInitialPolygon(currentShape);
+}
+
+window.downloadPNG = function(){
+    var src = view.element, out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = themeColor('--canvas', '#ffffff');
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0);
+    var a = document.createElement('a');
+    a.download = 'partition.png';
+    a.href = out.toDataURL('image/png');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 }
 
 function updateProgress(pool, t){
@@ -1241,6 +1446,7 @@ function runPool(num, chain){ // pool num cuts what the previous pool left over,
 window.iterate = function(){
     if(running)
         return;
+    stopRequested = false;
     for(var j=0; j < pools.length; j++)
         pools[j].removeBest();
     runPool(0, true);
@@ -1251,28 +1457,51 @@ window.show = function(){
     clear();
 
     var parts = [];
-    function paint(s, color){
-        var pct = 100 * Math.abs(s.area / myPath.area);
+    painted = [];
+    function paint(s, k){
+        var color = partColor(k), pct = 100 * Math.abs(s.area / myPath.area);
         s.fillColor = color;
+        s.strokeColor = themeColor('--outline');
+        s.opacity = 1;
         s.bringToFront();
         // label at the point inside the part that is farthest from its edges, sized to fit there
         var spot = labelSpot(s);
         var fontSize = Math.max(9, Math.min(44, spot.radius / 1.8)); // "50.0%" is about 2.7 font sizes wide
-        drawables.push(new PointText({ point: spot.point + [0, fontSize / 3], justification: 'center', fontSize: fontSize + 'px', fontWeight: 'bold',
-                                       fillColor: 'white', strokeColor: 'rgba(0,0,0,0.35)', strokeWidth: 0.6, content: pct.toFixed(1) + '%'}));
-        parts.push({color: color, pct: pct});
+        var label = new PointText({ point: spot.point + [0, fontSize / 3], justification: 'center', fontSize: fontSize + 'px', fontWeight: 'bold',
+                                    fillColor: 'white', strokeColor: 'rgba(0,0,0,0.35)', strokeWidth: 0.6, content: pct.toFixed(1) + '%'});
+        drawables.push(label);
+        painted.push({k: k, item: s, label: label});
+        parts.push({k: k, row: distOrder[k] === undefined ? k : distOrder[k], color: color, pct: pct});
     }
 
     if(pools.length){
         var k=0;
         for(; k < pools.length; k++)
             if(pools[k].bestSides)
-                paint(pools[k].bestSides[0], colors[k]);
+                paint(pools[k].bestSides[0], k);
 
         if(pools[k-1].bestSides)
-            paint(pools[k-1].bestSides[1], colors[k]);
+            paint(pools[k-1].bestSides[1], k);
     }
     renderLegend(parts);
+    highlightPart(highlighted);
+}
+
+var painted = [], highlighted = -1;
+
+window.highlightPart = highlightPart;
+window.togglePart = function(k){ highlightPart(highlighted == k ? -1 : k); } // touch screens have no hover
+function highlightPart(k){ // dim every part but k on the canvas (k = -1: none)
+    highlighted = (k === undefined || k === null) ? -1 : k;
+    var any = painted.some(function(p){ return p.k == highlighted; });
+    for(var i=0; i < painted.length; i++){
+        var on = !any || painted[i].k == highlighted;
+        painted[i].item.opacity = on ? 1 : 0.22;
+        painted[i].label.opacity = on ? 1 : 0.3;
+    }
+    var items = document.querySelectorAll('#result_legend .legend-item');
+    for(var i=0; i < items.length; i++)
+        items[i].classList.toggle('hl', any && items[i].getAttribute('data-part') == String(highlighted));
 }
 
 function labelSpot(part){ // approximate pole of inaccessibility: grid search, then a finer search around the best cell
@@ -1303,10 +1532,16 @@ function renderLegend(parts){
         el.innerHTML = '<span class="hint">Press Iterate to partition the polygon.</span>';
         return;
     }
-    var html = '';
-    for(var i=0; i < parts.length; i++)
-        html += '<span class="legend-item"><i style="background:' + parts[i].color + '"></i>' + parts[i].pct.toFixed(1) + ' %'
-              + (dist[i] !== undefined ? '<small>target ' + (100 * dist[i]).toFixed(1) + ' %</small>' : '') + '</span>';
+    var total = weights.reduce(function(a, b){ return a + b; }, 0), html = '';
+    parts = parts.slice().sort(function(a, b){ return a.row - b.row; }); // in the editor's order
+    for(var i=0; i < parts.length; i++){
+        var target = weights[parts[i].row] !== undefined ? ' target ' + (100 * weights[parts[i].row] / total).toFixed(1) + ' %' : '';
+        html += '<div class="legend-item" tabindex="0" data-part="' + parts[i].k + '"'
+              + ' onmouseenter="window.highlightPart(' + parts[i].k + ')" onmouseleave="window.highlightPart(-1)"'
+              + ' onfocus="window.highlightPart(' + parts[i].k + ')" onblur="window.highlightPart(-1)"'
+              + ' onclick="window.togglePart(' + parts[i].k + ')">'
+              + '<i class="swatch" style="background:' + parts[i].color + '"></i><b>' + parts[i].pct.toFixed(1) + ' %</b><small>' + target + '</small></div>';
+    }
     el.innerHTML = html;
 }
 

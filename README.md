@@ -2,7 +2,7 @@
 
 An interactive web app that splits a polygon into parts with the areas you ask for (for example `50,30,10,10`), using straight cuts chosen by a genetic algorithm. The result is drawn right on the polygon, each part in its own color with its area.
 
-Pick one of eight shapes or edit the polygon by dragging its points on the canvas, set the parcel distribution and the objectives in the *Partition* tab, and press *Iterate*. The *Simulation* tab shows the algorithm step by step, and *GA Settings* controls its speed and parameters. See [Usage](#usage) for details.
+Pick one of eight shapes or edit the polygon by dragging its points on the canvas, set the parcel distribution and the objectives in the *Partition* tab, and press *Iterate* (or *Stop*). The *Simulation* tab shows the algorithm step by step, and *Settings* controls its speed and parameters. See [Usage](#usage) for details.
 
 **Try it: [mehmetakifakkus.github.io/partitioning](https://mehmetakifakkus.github.io/partitioning/)**
 
@@ -21,15 +21,21 @@ The project is a static web page: there is no build step, package manager or ser
 
 ## Usage
 
-The page has the polygon canvas on the left and a panel with three tabs on the right: **Partition**, **Simulation** and **GA Settings**. The canvas scales to fill the window (it keeps its 500 × 500 coordinate system); on phones and narrow windows the panel moves below it, and the polygon can be edited by touch.
+The page works like an app: a sidebar on the left with three tabs (**Partition**, **Simulation**, **Settings**), and the polygon canvas on the right under a toolbar. On a desktop nothing scrolls but the sidebar; the canvas fills the space left (it keeps its 500 × 500 coordinate system). On phones and narrow windows the toolbar and canvas come first and the tabs follow below; the polygon can be edited by touch. The page follows the system's light or dark theme.
+
+### Toolbar
+- **Iterate** runs the algorithm; **Stop** ends a run right away and keeps the best cuts found so far. A progress bar shows the current cut and generation. Both work from every tab.
+- **Reset** restores the selected shape (undoing edits) and clears the result.
+- **PNG** downloads the canvas as `partition.png`.
+- **Grid** shows or hides the coordinate grid; the choice is remembered.
+- Keyboard: `0` runs, `Esc` stops, `1`–`9` re-runs a single cut (ignored while typing in a text field).
 
 ### Partition
 - **Shape:** pick one of the eight shapes shown as thumbnails (Square, House, Heptagon, Concave, L-shape, Trapezoid, Triangle, Cross). The selected one is highlighted. Shapes are defined in the `SHAPES` list in `js/partitioning.js`.
 - **Edit the polygon:** drag vertices or edges on the canvas; hold `CTRL` and click to add a new vertex.
-- **Parcel distribution:** enter comma-separated weights (they are normalized automatically), or click a preset chip such as `50 · 30 · 10 · 10`.
-- **Iterate:** runs the algorithm. A progress bar shows the current cut and generation. Keyboard: `0` runs it, `1`–`9` re-runs a single cut (ignored while typing in a text field).
-- **Objectives:** toggle the optional fitness terms (well-shaped rectangles, good aspect ratio, circle-filled polygons, more convex polygons).
-- **Result:** each part's color and area next to its target, plus the fitness and consistency scores of the best solution.
+- **Distribution:** each part has a row with its color, a weight slider, its share and a remove button; *+ Part* adds one (2–10 parts). A stacked bar previews the shares in the parts' colors. The same weights can be typed as comma-separated numbers, or picked from a preset chip such as `50 · 30 · 10 · 10`. Every part keeps its row's color on the canvas, even though the largest part is cut first.
+- **Objectives:** toggle the optional fitness terms (rectangles, aspect ratio, circle filling, convexity).
+- **Result:** each part's area next to its target, plus the fitness and consistency scores of the best solution. Hovering (or tapping) a part in the list highlights it on the canvas and dims the others.
 
 ### Simulation
 Tick *Simulate* to watch every generation in four phases (tournament → mutation → evaluation → replacement).
@@ -37,7 +43,7 @@ Tick *Simulate* to watch every generation in four phases (tournament → mutatio
 - The polygon canvas draws every individual's cut, with the lines in play highlighted. The panel lists the population (gene = cut angle, shown as a compass needle) with fitness bars and explains each phase.
 - Unticking the box finishes the current run at full speed.
 
-### GA Settings
+### Settings
 Sliders for the algorithm's parameters. Changes apply right away (population size from the next run), are saved in the browser (`localStorage`), and *Reset to defaults* restores them.
 
 | Group | Setting | Default |
@@ -55,13 +61,14 @@ Sliders for the algorithm's parameters. Changes apply right away (population siz
 
 | Path | Purpose |
 |---|---|
-| `index.html` | UI: polygon canvas on the left; *Partition*, *Simulation* and *GA Settings* tabs on the right |
-| `css/shapes.css` | Page layout and styles |
-| `js/partitioning.js` | Main logic (loaded as PaperScript): settings (`config`), shape and distribution presets, interaction, geometry helpers, genetic algorithm, rendering |
+| `index.html` | UI: sidebar with the *Partition*, *Simulation* and *Settings* tabs; toolbar and polygon canvas |
+| `css/shapes.css` | Layout, styles and the light/dark theme (CSS variables) |
+| `js/partitioning.js` | Main logic (loaded as PaperScript): settings (`config`), shape and distribution presets, distribution editor, tabs and toolbar, interaction, geometry helpers, genetic algorithm, rendering |
 | `js/paper.js` | Vector graphics, path intersection/boolean operations, hit testing |
 | `js/numeric-1.2.6.min.js` | Covariance matrix and eigenvalue computations |
 | `js/nerdamer/` | Symbolic equation solving (circle through three points) |
-| `js/jquery-2.1.4.min.js`, `js/bootstrap.min.js`, `css/bootstrap.min.css` | UI framework (tabs, buttons) |
+| `js/jquery-2.1.4.min.js` | Reads the objective checkboxes |
+| `js/bootstrap.min.js`, `css/bootstrap.min.css` | No longer loaded by the page (kept in the repository) |
 | `images/` | Screenshots of the live site used in this README |
 
 ## Algorithm
@@ -74,7 +81,7 @@ All of the logic lives in `js/partitioning.js`.
 - Each **gene pool** (`GenePool`) holds a population of 10 lines (configurable). The initial angles come from the principal axis of the polygon's vertices (`getMainAngle`, a PCA-like approach), rotated by 0°/90°/180°/270° and by random amounts.
 
 ### Mutation (`mutation`)
-Defaults shown; all of them can be changed in the *GA Settings* tab.
+Defaults shown; all of them can be changed in the *Settings* tab.
 
 | Probability | Operation |
 |---|---|
