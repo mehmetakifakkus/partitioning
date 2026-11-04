@@ -66,9 +66,9 @@ Sliders for the algorithm's parameters. Changes apply right away (population siz
 | `js/partitioning.js` | Main logic (loaded as PaperScript): settings (`config`), shape and distribution presets, distribution editor, tabs and toolbar, interaction, geometry helpers, genetic algorithm, rendering |
 | `js/paper.js` | Vector graphics, path intersection/boolean operations, hit testing |
 | `js/numeric-1.2.6.min.js` | Covariance matrix and eigenvalue computations |
-| `js/nerdamer/` | Symbolic equation solving (circle through three points) |
-| `js/jquery-2.1.4.min.js` | Reads the objective checkboxes |
-| `js/bootstrap.min.js`, `css/bootstrap.min.css` | No longer loaded by the page (kept in the repository) |
+| `tests/run.js` | Browser tests (headless Chromium via Playwright); see [Tests](#tests) |
+| `package.json` | Test dependency (Playwright) and the `npm test` script |
+| `.github/workflows/tests.yml` | Runs the tests on every push to `master` and every pull request |
 | `images/` | Screenshots used in this README |
 
 ## Algorithm
@@ -110,12 +110,21 @@ The polygon is divided step by step. Each gene pool cuts the current polygon in 
 
 - Intermediate remainders are not scored for shape, since they are cut again. Cuts are greedy: an early cut cannot be revised to help a later one.
 - Weights are sorted in descending order before cutting (`normalize`), so the largest part is always cut first.
-- The code is a research prototype: it still contains `debugger` statements, verbose `console` logging and commented-out code (e.g. a *Stop* button).
-- There are no automated tests.
+
+## Tests
+
+The app has no build step; the tests open it in headless Chromium and check it end to end:
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+`tests/run.js` starts a small static server for the repository and runs 14 tests: exact areas for every shape, the circle through three points, Stop and `Esc`, GA settings (applied, remembered, reset), keyboard shortcuts, the distribution editor and part colors, legend highlighting, the simulation's phases, vertex dragging, the grid toggle and PNG export, the desktop and phone layouts, and percentages with a wide font. The app runs as PaperScript, so the tests read its state through a small hook they append to `js/partitioning.js` when serving it. GitHub Actions runs the same tests on every pull request (`.github/workflows/tests.yml`).
 
 ## Libraries
 
-- [Paper.js](http://paperjs.org/)
+- [Paper.js](http://paperjs.org/) 0.9.25
 - [numeric.js](https://github.com/sloisel/numeric) 1.2.6
-- [nerdamer](https://github.com/jiggzson/nerdamer)
-- jQuery 2.1.4, Bootstrap
+- [Playwright](https://playwright.dev/) (tests only)
