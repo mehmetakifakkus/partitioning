@@ -307,6 +307,25 @@ test('layout: desktop fits the window, phone has no horizontal scroll', async ()
     await page.context().close();
 });
 
+test('the toolbar stays on one line at every desktop width', async () => {
+    const page = await openPage();
+    const wrapped = [];
+    for(const tab of ['tab_settings', 'tab_sim']){ // the Simulation tab has a wider sidebar
+        await page.click(`.tab[data-tab="${tab}"]`);
+        for(const w of [821, 860, 900, 950, 1000, 1100, 1241, 1280, 1320, 1360, 1361, 1400, 1548, 1920]){
+            await page.setViewportSize({ width: w, height: 800 });
+            await page.waitForTimeout(260); // the sidebar width is animated
+            const rows = await page.evaluate(() => { // distinct top positions of the toolbar's buttons
+                const tops = [...document.querySelectorAll('.toolbar .btn')].map(b => Math.round(b.getBoundingClientRect().top));
+                return new Set(tops).size;
+            });
+            if(rows > 1) wrapped.push(tab + ' ' + w);
+        }
+    }
+    check(wrapped.length === 0, 'toolbar wraps at ' + wrapped.join(', ') + ' px');
+    await page.context().close();
+});
+
 test('distribution percentages stay on one line with a wide font', async () => {
     const page = await openPage();
     await page.addStyleTag({ content: 'body, button, input { font-family: "DejaVu Sans", Verdana, sans-serif !important; }' });

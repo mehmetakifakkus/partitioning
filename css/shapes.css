@@ -246,11 +246,28 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 5p
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* narrow desktop windows: the canvas tools keep their icons only, so the toolbar stays on one line */
-@media (max-width: 1240px) {
+@media (max-width: 1360px) {
     .toolbar .btn:not(.btn-primary):not(.btn-stop) .lbl { display: none; }
     .toolbar .btn:not(.btn-primary):not(.btn-stop) { padding: 0 10px; }
     .progress-wrap { flex: 1 1 120px; min-width: 90px; }
     .toolbar-spacer { display: none; }
+}
+/* the Simulation tab's wider sidebar leaves less room: icons only up to a larger width */
+@media (max-width: 1480px) {
+    .app.wide-side .toolbar .btn:not(.btn-primary):not(.btn-stop) .lbl { display: none; }
+    .app.wide-side .toolbar .btn:not(.btn-primary):not(.btn-stop) { padding: 0 10px; }
+    .app.wide-side .progress-wrap { flex: 1 1 120px; min-width: 90px; }
+    .app.wide-side .toolbar-spacer { display: none; }
+}
+/* the narrowest two-column windows: a narrower sidebar, and Iterate and Stop keep their icons only too */
+@media (max-width: 1000px) {
+    .app { grid-template-columns: 320px minmax(0, 1fr); }
+    .app.wide-side { grid-template-columns: 380px minmax(0, 1fr); }
+    .side-scroll { padding: 4px 14px 20px; }
+    .toolbar .btn .lbl { display: none; }
+    .toolbar .btn { padding: 0 11px; }
+    /* flex-basis decides whether an item still fits the line, so it must be small here too */
+    .progress-wrap, .app.wide-side .progress-wrap { flex: 1 1 60px; min-width: 60px; margin-left: 2px; }
 }
 
 /* ===== phones and narrow windows: canvas on top, panel below, normal page scroll ===== */
