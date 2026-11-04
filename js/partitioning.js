@@ -157,7 +157,7 @@ function onMouseMove(event){
     }    
 } 
 
-points = [];
+var points = [];
 function onMouseDown(event){ 
 
     segment = path = stroke = null;
@@ -165,7 +165,6 @@ function onMouseDown(event){
     var hitResult = myPath.hitTest(event.point, hitOptions); // only the polygon, not the vertex markers drawn on top of it
 
     if (hitResult) {
-        console.log(hitResult.type)
 		path = hitResult.item;
         if (hitResult.type == 'segment')
            segment = hitResult.segment;
@@ -181,7 +180,7 @@ function onMouseDown(event){
     if (event.modifiers.control) { // if control is pressed add new point
         myPath.add(event.point);
         points = [];
-        for(k=0; k < myPath.segments.length; k++)
+        for(var k=0; k < myPath.segments.length; k++)
             points.push(new PolygonPoint(myPath.segments[k].point));
     }  
 }
@@ -237,7 +236,7 @@ function PolygonPoint(p){
     this.draw = function(){
         var ink = themeColor('--outline');
         drawables.push(new PointText({ point: p + [5, -5], fontSize: '16px', fillColor: ink, content: ' '+ this.id}));
-        drawables.push(new Path.Circle({ name: 'vertice-'+i, center: p, radius: 5, fillColor: ink}));
+        drawables.push(new Path.Circle({ name: 'vertex-' + this.id, center: p, radius: 5, fillColor: ink}));
     }
 };
 
@@ -252,17 +251,11 @@ function Line(angle, fitness){ // a cutting line: its direction is the GA gene, 
 ////////////////////////////////////     Visual Part      ///////////////////////////////
 
 function clear(){
-    for(i=0; i<drawables.length; i++) // it is for lines, circles, texts etc.
+    for(var i=0; i < drawables.length; i++) // lines, circles, texts etc.
         drawables[i].remove();
 
     PolygonPoint.counter = 0;
 }
-
-Array.prototype.clear = function() {
-  while (this.length) {
-    this.pop();
-  }
-};
 
 function getDataFromPath(path){  // path is a paperjs object, get Nx2 data array from it
  
@@ -326,9 +319,11 @@ function drawCoordinateSystem(){
     var ink = themeColor('--grid');
     function add(item){ item.visible = gridOn; gridItems.push(item); }
 
-    for(var i = 0; i <= 11; i++){
-        add(new PointText({point: convertToRealCoord(new Point(0, 2*i)) + [3, +3], fontSize: '12px', fillColor: ink, content: ' '+i*50, opacity: 0.6}));
-        add(new PointText({point: convertToRealCoord(new Point(2*i, 0)) + [-13, -2], fontSize: '12px', fillColor: ink, content: ' '+i*50, opacity: 0.6}));
+    // labels every 50 units; the ones at the edges are moved inside so they are not cut off
+    add(new PointText({point: [4, 494], fontSize: '12px', fillColor: ink, content: '0', opacity: 0.6}));
+    for(var i = 1; i <= 10; i++){
+        add(new PointText({point: [5, Math.max(13, 500 - 50 * i + 4)], fontSize: '12px', fillColor: ink, content: String(i * 50), opacity: 0.6}));
+        add(new PointText({point: [Math.min(486, 50 * i), 494], justification: 'center', fontSize: '12px', fillColor: ink, content: String(i * 50), opacity: 0.6}));
     }
     for(var  i = 0; i <= 21; i++){
         add(new Path.Line({from: convertToRealCoord(new Point(0, i)), to: convertToRealCoord(new Point(21, i)), strokeColor: ink, strokeWidth: 1, dashArray: [1,2], opacity: 0.2}));
@@ -442,20 +437,17 @@ function crossProduct(v1, v2){
 
 /////////////////////////////////    Circle Operation    /////////////////////////////
 
-function getCenterAndRadius3(p1, p2, p3){
-    var eq1 = p1.x*p1.x + p1.y*p1.y +'+'+p1.x+'*d+'+p1.y+'*e+f=0';
-    var eq2 = p2.x*p2.x + p2.y*p2.y +'+'+p2.x+'*d+'+p2.y+'*e+f=0';
-    var eq3 = p3.x*p3.x + p3.y*p3.y +'+'+p3.x+'*d+'+p3.y+'*e+f=0';
-    
-    var sol = nerdamer.solveEquations([eq1, eq2, eq3]);
-    
-    var x = sol[0][1]/-2;
-    var y = sol[1][1]/-2;
-
-    var res = x*x + y*y + sol[0][1] * x +sol[1][1] * y + sol[2][1];
-    var r = Math.sqrt(Math.abs(res));
- 
-    return {center: new Point(x,y), r:r}
+function getCenterAndRadius3(p1, p2, p3){ // circle through three points (circumcircle)
+    var d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
+    if(Math.abs(d) < 1e-9){ // collinear: the circle through the two farthest points
+        var pairs = [[p1, p2], [p1, p3], [p2, p3]];
+        pairs.sort(function(a, b){ return b[0].getDistance(b[1]) - a[0].getDistance(a[1]); });
+        return getCenterAndRadius2(pairs[0][0], pairs[0][1]);
+    }
+    var s1 = p1.x * p1.x + p1.y * p1.y, s2 = p2.x * p2.x + p2.y * p2.y, s3 = p3.x * p3.x + p3.y * p3.y;
+    var center = new Point((s1 * (p2.y - p3.y) + s2 * (p3.y - p1.y) + s3 * (p1.y - p2.y)) / d,
+                           (s1 * (p3.x - p2.x) + s2 * (p1.x - p3.x) + s3 * (p2.x - p1.x)) / d);
+    return {center: center, r: p1.getDistance(center)};
 }
 
 function getCenterAndRadius2(p1, p2){
@@ -544,11 +536,11 @@ function normalize(arr){
     
     var total = 0;
     
-    for(i=0; i < arr.length; i++)
+    for(var i=0; i < arr.length; i++)
         total += arr[i];
     
     
-    for(i=0; i < arr.length; i++)
+    for(var i=0; i < arr.length; i++)
         arr[i] /= total;    
     
     arr.sort(function(a, b) {return b - a});
@@ -569,7 +561,7 @@ function getMainAngle(polygon){
     var center = [numeric.sum(getCol(data, 0))/N, numeric.sum(getCol(data, 1))/N];
     
     var data_m = numeric.rep([N,2], 0); // create a matrix with value 0
-    for(i=0; i<data.length; i++){ 
+    for(var i=0; i < data.length; i++){
         data_m[i][0] = data[i][0] - center[0];
         data_m[i][1] = data[i][1] - center[1];
     }
@@ -690,7 +682,7 @@ function rectanglityandConcavity(polygon){
     var diff = 0, counter = 0, seg = polygon.segments, N = polygon.segments.length;
     var vector1, vector2;
     
-    for(i=0; i<seg.length; i++)
+    for(var i=0; i < seg.length; i++)
     {        
         if(i == 0){            
             vector1 = seg[seg.length -1].point - seg[0].point;
@@ -715,7 +707,6 @@ function rectanglityandConcavity(polygon){
             drawables.push(new Path.Circle({ center: seg[i].point, radius: 5, fillColor: 'yellow'}));
         }
         diff += Math.abs(90-angle);
-        //console.log(i+"  "+angle)
     } 
     return {concave: counter, diff: diff/((N-2)*180)};
 }
@@ -786,7 +777,7 @@ function GenePool(p, d){
         self.removeBest();
         self.bestSides = cutPath(self.path, best);
         fitnessFunction(self.bestSides, self.dist[0], self.path, isLastPool()); // refresh the statistics for the best item
-        document.getElementById("info_fitness").innerHTML = "Fitness value:  " + best.fitnessValue.toFixed(4);
+        document.getElementById("info_fitness").textContent = best.fitnessValue.toFixed(3);
     }
 
     // One generation = tournament -> mutation -> evaluation -> replacement.
@@ -801,7 +792,6 @@ function GenePool(p, d){
             g.b = self.lines[getRandomInt(0, self.lines.length)];
             g.parent = g.a.fitnessValue >= g.b.fitnessValue ? g.a : g.b;
             g.phase = 'tournament';
-            document.getElementById("info_iter").innerHTML = "Iteration no:  " + (pools.indexOf(self) + 1) + " - " + g.t;
             updateProgress(self, g.t);
         }
         else if(g.phase == 'tournament'){       // mutation
@@ -903,10 +893,15 @@ function GenePool(p, d){
 
 var areaWeight = 1; // the shape weights live in config (GA Settings tab)
 
+function objectiveOn(cls){ // is the objective's checkbox (Partition tab) ticked?
+    var box = document.querySelector('.' + cls);
+    return !!(box && box.checked);
+}
+
 function shapePenalty(polygon, stats){ // weighted sum of the enabled shape objectives for one part
     var total = 0;
 
-    if($('.good-aspect-ratio:checked').val()){
+    if(objectiveOn('good-aspect-ratio')){
         var r = config.wRatio * (aspectRatio(polygon) - 1);
         stats.ratio += r;
         total += r;
@@ -914,15 +909,15 @@ function shapePenalty(polygon, stats){ // weighted sum of the enabled shape obje
 
     var res = rectanglityandConcavity(polygon);
 
-    if($('.well-shaped-rectangles:checked').val()){
+    if(objectiveOn('well-shaped-rectangles')){
         stats.rect += config.wRect * res.diff;
         total += config.wRect * res.diff;
     }
 
-    if($('.convexity:checked').val())
+    if(objectiveOn('convexity'))
         total += config.wConvex * res.concave; // number of concave points
 
-    if($('.well-filled-circles:checked').val())
+    if(objectiveOn('well-filled-circles'))
         total += config.wCircle * miniDisc(polygon).areaPenalty;
 
     return total;
@@ -930,9 +925,6 @@ function shapePenalty(polygon, stats){ // weighted sum of the enabled shape obje
 
 // bothSides: score the shape of both parts (used by the last pool, whose remainder is a final part as well)
 function fitnessFunction(sides, dist, path, bothSides){
-
-    if(typeof sides[0]  == 'undefined')
-        debugger
 
     if(sides[0].className == "CompoundPath" || sides[1].className == "CompoundPath") // cut produced several pieces
         return 0;
@@ -951,11 +943,10 @@ function fitnessFunction(sides, dist, path, bothSides){
     }
     total /= count;
 
-    document.getElementById("info_area").innerHTML = "Area consistency: " + (1 - areaPenalty).toFixed(6);
-    if($('.good-aspect-ratio:checked').val())
-        document.getElementById("info_ratio").innerHTML = "Aspect ratio consistency: " + (1 - stats.ratio / count).toFixed(6);
-    if($('.well-shaped-rectangles:checked').val())
-        document.getElementById("info_rect").innerHTML = "Rectanglity consistency: " + (1 - stats.rect / count).toFixed(6);
+    // consistency = 1 - penalty (1 is perfect); a dash when the objective is off
+    document.getElementById("info_area").textContent = (1 - areaPenalty).toFixed(3);
+    document.getElementById("info_ratio").textContent = objectiveOn('good-aspect-ratio') ? (1 - stats.ratio / count).toFixed(3) : '\u2013';
+    document.getElementById("info_rect").textContent = objectiveOn('well-shaped-rectangles') ? (1 - stats.rect / count).toFixed(3) : '\u2013';
 
     return 1 - (areaPenalty + total);
 }
@@ -1254,7 +1245,7 @@ function drawSimulation(pool, g){
 function generatePools(path){
     for(var j=0; j < pools.length; j++)
         pools[j].removeBest();
-    pools.clear()
+    pools.length = 0;
     for(var j=0; j < dist.length - 1; j++)
         pools.push(new GenePool(path, dist))
 
@@ -1341,23 +1332,16 @@ window.removePart = function(i){
 function resetProgress(){
     var bar = document.getElementById('run_bar'), label = document.getElementById('run_label');
     if(bar) bar.style.width = '0%';
+    ['info_fitness', 'info_area', 'info_ratio', 'info_rect'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) el.textContent = '\u2013';
+    });
     if(label) label.textContent = 'Ready · ' + Math.max(0, dist.length - 1) + ' cuts × ' + config.generations + ' generations';
     renderLegend([]);
 }
 window.readDistAndNormalize();
 
  
-//    if(document.getElementById("run").innerHTML == "Stop!")
-//    {
-//        document.getElementById("run").innerHTML = "Iterate";
-//        document.getElementById("run").className = "btn btn-warning";
-//        g1.t=200
-//    }
-//    else{
-//        g1.t=0;
-//        document.getElementById("run").innerHTML = "Stop!";
-//        document.getElementById("run").className = "btn btn-danger";  
-//    }
 
 
 var running = false, stopRequested = false, activePool = null;

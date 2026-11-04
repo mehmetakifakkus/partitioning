@@ -1,0 +1,11 @@
+{
+  "name": "partitioning",
+  "private": true,
+  "description": "Genetic algorithm solution for polygon decomposition",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

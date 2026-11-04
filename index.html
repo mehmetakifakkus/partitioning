@@ -5,16 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="css/shapes.css" rel="stylesheet">
 
-    <script src="js/jquery-2.1.4.min.js"></script>
 
     <!--    for SVD and matrix operations-->
     <script src="js/numeric-1.2.6.min.js"></script>
 
-    <!--    for symbolic mathematic opertions-->
-    <script src="js/nerdamer/nerdamer.core.js"></script>
-    <script src="js/nerdamer/Algebra.js"></script>
-    <script src="js/nerdamer/Calculus.js"></script>
-    <script src="js/nerdamer/Solve.js"></script>
 
     <!-- Load the Paper.js library -->
     <script type="text/javascript" src="js/paper.js"></script>
@@ -39,7 +33,7 @@
                 <div class="about-pop">
                     <p>Splits a polygon into parts with the areas you ask for, using straight cuts. Every cut is placed so the areas are exact; a genetic algorithm chooses the cut directions that give the best-shaped parts.</p>
                     <p>Edit the polygon by dragging its points or edges; CTRL + click adds a point. Keyboard: <kbd>0</kbd> runs, <kbd>Esc</kbd> stops.</p>
-                    <p class="credit">Developed by <a href="http://www.ceng.metu.edu.tr/~akifakkus/doku.php" target="_blank" rel="noopener">Mehmet Akif AKKUS</a> using paper.js, nerdamer.js and numeric.js.</p>
+                    <p class="credit">Developed by <a href="http://www.ceng.metu.edu.tr/~akifakkus/doku.php" target="_blank" rel="noopener">Mehmet Akif AKKUS</a> using paper.js and numeric.js.</p>
                 </div>
             </details>
         </header>
@@ -75,12 +69,11 @@
 
                 <div class="section-label">Result <span class="hint-inline">hover to highlight</span></div>
                 <div id="result_legend" class="legend"></div>
-                <div class="stats">
-                    <p id="info_iter">Iteration no:  0</p>
-                    <p id="info_fitness">Fitness value: 0</p>
-                    <p id="info_area">Area consistency: 0</p>
-                    <p id="info_ratio">Aspect ratio consistency: 0</p>
-                    <p id="info_rect">Rectanglity consistency: 0</p>
+                <div class="metrics" title="Consistency = 1 − penalty of the best solution (1 is perfect)">
+                    <div class="metric"><small>Fitness</small><b id="info_fitness">–</b></div>
+                    <div class="metric"><small>Area</small><b id="info_area">–</b></div>
+                    <div class="metric"><small>Aspect ratio</small><b id="info_ratio">–</b></div>
+                    <div class="metric"><small>Rectangles</small><b id="info_rect">–</b></div>
                 </div>
             </section>
 

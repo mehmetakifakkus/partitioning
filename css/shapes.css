@@ -208,8 +208,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 5p
 .legend-item b { font-variant-numeric: tabular-nums; }
 .legend-item small { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .legend-item:hover, .legend-item.hl { background: var(--focus-soft); border-color: color-mix(in srgb, var(--focus) 35%, transparent); }
-.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; margin-top: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.stats p { margin: 0 0 3px; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+.metric { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.metric small { display: block; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric b { font-variant-numeric: tabular-nums; font-size: 15px; }
 
 /* ===== simulation tab ===== */
 .sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 14px 0 6px; }
@@ -260,5 +262,6 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 5p
     .setting input[type=range] { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 400px) {
-    .objectives, .stats { grid-template-columns: 1fr; }
+    .objectives { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr 1fr; }
 }
