@@ -276,20 +276,24 @@ function refreshPoints(){
        points[k].draw(); 
 }
 
-var currentShape = 2;
+var currentShape = 2, currentPoints = null; // the shape Reset returns to (0: a polygon from a shared link)
 
 window.createInitialPolygon = function(t){
+    setPolygon(SHAPES[t - 1].points, t);
+}
+
+function setPolygon(polygon, t){ // t: the preset's number, or 0 for any other polygon
     if(running)
         window.stopRun();
-    currentShape = t;
+    currentShape = t || 0;
+    currentPoints = polygon.map(function(p){ return [p[0], p[1]]; });
     if(myPath.name){
         points = [];
         myPath.remove();
     }
 
     myPath = new Path({name: 'polygon', strokeColor: themeColor('--outline'), strokeWidth: 2, closed:true});
-    var polygon = SHAPES[t - 1].points;
-    markActive('.shape-btn', 'data-shape', String(t));
+    markActive('.shape-btn', 'data-shape', String(currentShape));
 
     for(var k=0; k < polygon.length; k++){
         myPath.add(new Point(polygon[k]));
@@ -832,6 +836,12 @@ function GenePool(p, d){
         drawSimulation(null);
         if(self.onDone)
             self.onDone();
+    }
+
+    this.applyCut = function(angle){ // the cut at this angle, with its offset solved for the exact area (shared links)
+        self.lines = [new Line(angle)];
+        evaluate(self.lines[0]);
+        updateBest();
     }
 
     this.halt = function(){ // Stop: keep the best cut found so far and end the run
@@ -1378,8 +1388,161 @@ window.stopRun = function(){ // ends the run right away; the best cuts found so 
         stopRequested = true; // checked by the next frame
 }
 
-window.resetShape = function(){ // back to the selected shape without edits, and no result
-    createInitialPolygon(currentShape);
+window.resetShape = function(){ // back to the selected (or shared) shape without edits, and no result
+    setPolygon(currentPoints, currentShape);
+}
+
+///////////////////////////////   shareable links   ////////////////////////////////
+// The link's hash holds the polygon, the distribution, the objectives, the GA settings that differ
+// from the defaults, and the angle of every cut found. Each cut's offset is solved again from its
+// angle, so the areas are exact and the link reproduces the result without running the algorithm:
+//   #v=1&poly=100,200;250,100;...&dist=50,30,10,10&obj=rac&cuts=180,93.412&cfg=generations:300
+
+var OBJECTIVE_CODES = {r: 'well-shaped-rectangles', a: 'good-aspect-ratio', c: 'well-filled-circles', x: 'convexity'};
+
+function roundTo(v, digits){
+    var f = Math.pow(10, digits);
+    return String(Math.round(v * f) / f);
+}
+
+function buildShareHash(){
+    var parts = ['v=1'];
+    parts.push('poly=' + myPath.segments.map(function(sg){ return roundTo(sg.point.x, 1) + ',' + roundTo(sg.point.y, 1); }).join(';'));
+    parts.push('dist=' + weights.map(function(w){ return roundTo(w, 2); }).join(','));
+    parts.push('obj=' + Object.keys(OBJECTIVE_CODES).filter(function(c){ return objectiveOn(OBJECTIVE_CODES[c]); }).join(''));
+    var cuts = [];
+    for(var k=0; k < pools.length && pools[k].bestSides && pools[k].lines.length; k++)
+        cuts.push(roundTo(pools[k].lines[0].angle, 3));
+    if(cuts.length)
+        parts.push('cuts=' + cuts.join(','));
+    var cfg = Object.keys(CONFIG_DEFAULTS).filter(function(k){ return config[k] !== CONFIG_DEFAULTS[k]; })
+                    .map(function(k){ return k + ':' + config[k]; });
+    if(cfg.length)
+        parts.push('cfg=' + cfg.join(','));
+    return '#' + parts.join('&');
+}
+
+function settingRange(key){ // the slider's limits in the Settings tab
+    var input = document.querySelector('[data-setting="' + key + '"]');
+    return input ? {min: parseFloat(input.min), max: parseFloat(input.max)} : {min: -Infinity, max: Infinity};
+}
+
+function parseShareHash(hash){ // returns the shared state, or null if the link is not valid
+    var q = {};
+    hash.replace(/^#/, '').split('&').forEach(function(kv){
+        var i = kv.indexOf('=');
+        if(i > 0)
+            q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    });
+    if(q.v !== '1')
+        return null;
+
+    var poly = (q.poly || '').split(';').map(function(p){ return p.split(',').map(Number); });
+    var polyOk = poly.length >= 3 && poly.length <= 200 && poly.every(function(p){
+        return p.length == 2 && p.every(function(v){ return isFinite(v) && v > -1000 && v < 1500; });
+    });
+    var w = parseWeights(q.dist || '');
+    if(!polyOk || w.length < MIN_PARTS || w.length > MAX_PARTS)
+        return null;
+
+    var cuts = q.cuts ? q.cuts.split(',').map(Number) : [];
+    if(cuts.length > w.length - 1 || !cuts.every(isFinite))
+        return null;
+
+    var obj = null;
+    if(q.obj !== undefined){
+        if(!/^[racx]*$/.test(q.obj))
+            return null;
+        obj = q.obj;
+    }
+
+    var cfg = {};
+    (q.cfg ? q.cfg.split(',') : []).forEach(function(kv){
+        var p = kv.split(':'), key = p[0], v = parseFloat(p[1]);
+        if(key in CONFIG_DEFAULTS && isFinite(v)){
+            var r = settingRange(key);
+            cfg[key] = Math.min(r.max, Math.max(r.min, v));
+        }
+    });
+    return {poly: poly, weights: w, cuts: cuts, obj: obj, cfg: cfg};
+}
+
+function applyShared(state){
+    if(running)
+        window.stopRun();
+    for(var k in CONFIG_DEFAULTS) // the link's settings apply to this visit; they are not saved
+        config[k] = k in state.cfg ? state.cfg[k] : CONFIG_DEFAULTS[k];
+    syncSettingsUI();
+    if(state.obj !== null)
+        for(var c in OBJECTIVE_CODES)
+            document.querySelector('.' + OBJECTIVE_CODES[c]).checked = state.obj.indexOf(c) >= 0;
+
+    var preset = 0;
+    SHAPES.forEach(function(sh, i){
+        if(sh.points.length == state.poly.length && sh.points.every(function(p, j){ return p[0] == state.poly[j][0] && p[1] == state.poly[j][1]; }))
+            preset = i + 1;
+    });
+    setPolygon(state.poly, preset);
+    weights = state.weights.slice();
+    applyWeights(true);
+
+    for(var k=0; k < state.cuts.length; k++){ // the same sequence of cuts as runPool, at the shared angles
+        if(k == 0)
+            pools[0].reset(myPath, dist);
+        else
+            pools[k].reset(pools[k-1].bestSides[1], normalize(pools[k-1].dist.slice(1)));
+        pools[k].applyCut(state.cuts[k]);
+    }
+    window.show();
+    if(state.cuts.length){
+        document.getElementById('run_bar').style.width = (100 * state.cuts.length / pools.length).toFixed(1) + '%';
+        document.getElementById('run_label').textContent = 'Shared result · ' + (state.cuts.length == pools.length
+            ? pools.length + ' cuts' : state.cuts.length + ' of ' + pools.length + ' cuts');
+    }
+}
+
+function loadSharedLink(){
+    if(!window.location.hash || window.location.hash.length < 2)
+        return;
+    var state = parseShareHash(window.location.hash);
+    if(state)
+        applyShared(state);
+    else
+        showToast('This shared link is not valid; the default setup is shown.');
+}
+
+var toastTimer = null;
+function showToast(text){
+    var el = document.getElementById('toast');
+    if(!el)
+        return;
+    el.textContent = text;
+    el.classList.add('show');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function(){ el.classList.remove('show'); }, 2600);
+}
+
+window.shareLink = function(){
+    var hash = buildShareHash();
+    window.history.replaceState(null, '', hash); // the address bar now holds the link too
+    var url = window.location.href;
+    function fallback(){
+        var t = document.createElement('textarea');
+        t.value = url;
+        t.setAttribute('readonly', '');
+        t.style.position = 'fixed';
+        t.style.opacity = '0';
+        document.body.appendChild(t);
+        t.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch(e) {}
+        t.remove();
+        showToast(ok ? 'Link copied' : 'Copy the link from the address bar');
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(url).then(function(){ showToast('Link copied'); }, fallback);
+    else
+        fallback();
 }
 
 window.downloadPNG = function(){
@@ -1536,5 +1699,8 @@ window.loadDistribution = function(i){
     window.readDistAndNormalize();
 }
     
+loadSharedLink();
+window.addEventListener('hashchange', loadSharedLink);
+
 function onFrame(event){
 }

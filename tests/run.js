@@ -32,7 +32,10 @@ window.__t = {
             order: distOrder.slice(),
             weights: weights.slice(),
             grid: gridItems[0].visible,
-            zoom: view.zoom
+            zoom: view.zoom,
+            angles: pools.map(function(p){ return p.bestSides && p.lines.length ? p.lines[0].angle : null; }),
+            vertices: myPath.segments.map(function(sg){ return [sg.point.x, sg.point.y]; }),
+            activeShape: currentShape
         };
     },
     vertex: function(i){ var p = myPath.segments[i].point; return [p.x, p.y]; },
@@ -309,6 +312,99 @@ test('distribution percentages stay on one line with a wide font', async () => {
     await page.addStyleTag({ content: 'body, button, input { font-family: "DejaVu Sans", Verdana, sans-serif !important; }' });
     const wrapped = await page.$$eval('.part-pct', els => els.filter(e => e.getBoundingClientRect().height > 1.5 * parseFloat(getComputedStyle(e).lineHeight)).map(e => e.textContent));
     check(wrapped.length === 0, 'wrapped: ' + wrapped.join(', '));
+    await page.context().close();
+});
+
+test('a shared link reproduces the polygon, distribution, settings and result', async () => {
+    const page = await openPage();
+    await page.click('.shape-btn[data-shape="4"]');
+    await setDistribution(page, '50,33,17');
+    await setSlider(page, 'cfg_generations', 60);
+    await page.check('.convexity', { force: true });
+    await page.click('#run');
+    await waitIdle(page);
+    const before = await state(page);
+    await page.click('#share');
+    const url = page.url();
+    check(/#v=1&poly=/.test(url), 'the address bar has no shared link: ' + url);
+    check(/cuts=/.test(url) && /cfg=generations:60/.test(url) && /obj=racx|obj=[racx]*x/.test(url), 'the link misses cuts, settings or objectives: ' + url);
+    await page.evaluate(() => window.resetSettings());
+    await page.context().close();
+
+    const viewer = await openPage(); // a fresh browser: nothing saved
+    await viewer.goto(url);
+    await viewer.waitForFunction(() => window.__t && window.__t.state().done > 0);
+    const after = await state(viewer);
+    const want = expected('50,33,17');
+    check(after.parts.length === 3 && after.parts.every((p, i) => Math.abs(p - want[i]) < 0.05), 'shared parts: ' + after.parts);
+    after.angles.forEach((a, i) => check(Math.abs(a - before.angles[i]) < 0.001, `cut ${i + 1}: angle ${a}, was ${before.angles[i]}`));
+    check(JSON.stringify(after.colors) === JSON.stringify(before.colors), 'part colors differ');
+    check(after.activeShape === 4, 'the Concave preset should be selected, got ' + after.activeShape);
+    check(/^Shared result · 2 cuts/.test(await viewer.textContent('#run_label')), 'label: ' + await viewer.textContent('#run_label'));
+    check(await viewer.textContent('output[data-for="generations"]') === '60', 'the shared setting was not applied');
+    check(await viewer.isChecked('.convexity'), 'the shared objective was not applied');
+    const saved = await viewer.evaluate(() => window.localStorage.getItem('partitioning.config'));
+    check(saved === null, 'the shared settings were saved: ' + saved);
+    check(viewer.errors.length === 0, 'page errors: ' + viewer.errors.join('; '));
+    await viewer.context().close();
+});
+
+test('a shared link keeps an edited polygon; Reset returns to it', async () => {
+    const page = await openPage();
+    const [x, y] = await page.evaluate(() => window.__t.toScreen(250, 100));
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 40, y + 20, { steps: 5 });
+    await page.mouse.up();
+    const edited = (await state(page)).vertices.map(v => v.map(c => Math.round(c * 10) / 10));
+    await page.click('#share');
+    const url = page.url();
+    await page.context().close();
+
+    const viewer = await openPage();
+    await viewer.goto(url);
+    await viewer.waitForFunction(() => window.__t);
+    let s = await state(viewer);
+    check(JSON.stringify(s.vertices) === JSON.stringify(edited), 'vertices: ' + JSON.stringify(s.vertices) + ' vs ' + JSON.stringify(edited));
+    check(s.activeShape === 0 && await viewer.locator('.shape-btn.active').count() === 0, 'no preset should be selected for an edited polygon');
+    await viewer.click('#run');
+    await waitIdle(viewer);
+    await viewer.click('button[title^="Reset"]');
+    s = await state(viewer);
+    check(JSON.stringify(s.vertices) === JSON.stringify(edited) && s.parts.length === 0, 'Reset did not return to the shared polygon');
+    await viewer.context().close();
+});
+
+test('Share copies the link to the clipboard', async () => {
+    const page = await openPage({ permissions: ['clipboard-read', 'clipboard-write'] });
+    await page.click('#share');
+    await page.waitForSelector('#toast.show');
+    check(await page.textContent('#toast') === 'Link copied', 'toast: ' + await page.textContent('#toast'));
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    check(copied === page.url(), 'clipboard holds ' + copied);
+    await page.context().close();
+});
+
+test('an invalid link shows a notice and the default setup', async () => {
+    const page = await openPage();
+    for(const hash of ['#v=1&poly=1,2', '#v=1&poly=0,0;100,0;0,100&dist=50', '#v=2&poly=0,0;100,0;0,100&dist=1,1', '#v=1&poly=0,0;100,0;0,100&dist=1,1&cuts=a']){
+        await page.goto(baseUrl + '/index.html' + hash);
+        await page.waitForFunction(() => window.__t);
+        await page.waitForSelector('#toast.show');
+        const s = await state(page);
+        check(s.vertices.length === 5 && s.weights.join(',') === '50,30,10,10', `${hash}: not the default setup`);
+    }
+    check(page.errors.length === 0, 'page errors: ' + page.errors.join('; '));
+    await page.context().close();
+});
+
+test('changing the hash in an open page loads the new link', async () => {
+    const page = await openPage();
+    await page.evaluate(() => { window.location.hash = 'v=1&poly=100,100;400,100;400,400;100,400&dist=1,1&obj=r&cuts=90'; });
+    await page.waitForFunction(() => window.__t.state().done === 1);
+    const s = await state(page);
+    check(s.activeShape === 1 && s.parts.every(p => Math.abs(p - 50) < 0.05), 'hash change: ' + JSON.stringify({ shape: s.activeShape, parts: s.parts }));
+    check(!(await page.isChecked('.good-aspect-ratio')), 'objectives from the link were not applied');
     await page.context().close();
 });
 

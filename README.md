@@ -27,8 +27,26 @@ The page works like an app: a sidebar on the left with three tabs (**Partition**
 - **Iterate** runs the algorithm; **Stop** ends a run right away and keeps the best cuts found so far. A progress bar shows the current cut and generation. Both work from every tab.
 - **Reset** restores the selected shape (undoing edits) and clears the result.
 - **PNG** downloads the canvas as `partition.png`.
+- **Share** copies a link to the current setup and result (see [Shareable links](#shareable-links)).
 - **Grid** shows or hides the coordinate grid; the choice is remembered.
 - Keyboard: `0` runs, `Esc` stops, `1`–`9` re-runs a single cut (ignored while typing in a text field).
+
+### Shareable links
+*Share* puts a link in the address bar and copies it to the clipboard. Opening it shows the same polygon (edited vertices included), distribution, objectives and result right away, without running the algorithm:
+
+```
+https://mehmetakifakkus.github.io/partitioning/#v=1&poly=100,200;250,100;400,200;400,400;100,400&dist=50,30,10,10&obj=rac&cuts=180,270,296.069
+```
+
+| Field | Content |
+|---|---|
+| `poly` | The polygon's vertices, `x,y;x,y;…` (one decimal) |
+| `dist` | The distribution weights, in the editor's order |
+| `obj` | The objectives that are on: `r` rectangles, `a` aspect ratio, `c` circle filling, `x` convexity |
+| `cuts` | The angle of every cut found (largest part first). Each cut's offset is solved again from its angle, so the areas stay exact |
+| `cfg` | Only the GA settings that differ from the defaults, e.g. `cfg=generations:300,population:20`. They apply to that visit and are not saved |
+
+A link that cannot be read shows a short notice and the default setup. *Reset* on a shared polygon returns to that polygon.
 
 ### Partition
 - **Shape:** pick one of the eight shapes shown as thumbnails (Square, House, Heptagon, Concave, L-shape, Trapezoid, Triangle, Cross). The selected one is highlighted. Shapes are defined in the `SHAPES` list in `js/partitioning.js`.
@@ -121,7 +139,7 @@ npx playwright install chromium
 npm test
 ```
 
-`tests/run.js` starts a small static server for the repository and runs 14 tests: exact areas for every shape, the circle through three points, Stop and `Esc`, GA settings (applied, remembered, reset), keyboard shortcuts, the distribution editor and part colors, legend highlighting, the simulation's phases, vertex dragging, the grid toggle and PNG export, the desktop and phone layouts, and percentages with a wide font. The app runs as PaperScript, so the tests read its state through a small hook they append to `js/partitioning.js` when serving it. GitHub Actions runs the same tests on every pull request (`.github/workflows/tests.yml`).
+`tests/run.js` starts a small static server for the repository and runs 19 tests: exact areas for every shape, the circle through three points, Stop and `Esc`, GA settings (applied, remembered, reset), keyboard shortcuts, the distribution editor and part colors, legend highlighting, the simulation's phases, vertex dragging, the grid toggle and PNG export, the desktop and phone layouts, percentages with a wide font, and shareable links (round trip with an exact result, edited polygons, clipboard, invalid links, hash changes). The app runs as PaperScript, so the tests read its state through a small hook they append to `js/partitioning.js` when serving it. GitHub Actions runs the same tests on every pull request (`.github/workflows/tests.yml`).
 
 ## Libraries
 
