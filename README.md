@@ -8,9 +8,9 @@ Pick one of eight shapes or edit the polygon by dragging its points on the canva
 
 ## Screenshots
 
-Taken from the live site: on a desktop (1548 × 850) and on a phone (360 px wide).
+The app after a run of `50,30,10,10` on the House shape, on a desktop (1548 × 850) and on a phone (360 px wide).
 
-<img src="images/live-desktop.png" alt="Live site on a desktop: the polygon canvas fills the window height; on the right, the Partition tab with the eight shape cards, distribution presets and objectives" width="640"/> <img src="images/live-phone.png" alt="Live site on a phone: the canvas fits the screen width, with the Partition tab and the eight shape cards below it" width="180"/>
+<img src="images/app-desktop.png" alt="Desktop: the sidebar with the Partition tab (shapes, distribution editor, objectives, result) on the left; the toolbar and the partitioned polygon on the right" width="640"/> <img src="images/app-phone.png" alt="Phone: the toolbar and the partitioned polygon at the top, the Partition tab below" width="180"/>
 
 
 ## Overview
@@ -69,7 +69,7 @@ Sliders for the algorithm's parameters. Changes apply right away (population siz
 | `js/nerdamer/` | Symbolic equation solving (circle through three points) |
 | `js/jquery-2.1.4.min.js` | Reads the objective checkboxes |
 | `js/bootstrap.min.js`, `css/bootstrap.min.css` | No longer loaded by the page (kept in the repository) |
-| `images/` | Screenshots of the live site used in this README |
+| `images/` | Screenshots used in this README |
 
 ## Algorithm
 
