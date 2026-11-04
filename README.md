@@ -139,7 +139,7 @@ npx playwright install chromium
 npm test
 ```
 
-`tests/run.js` starts a small static server for the repository and runs 19 tests: exact areas for every shape, the circle through three points, Stop and `Esc`, GA settings (applied, remembered, reset), keyboard shortcuts, the distribution editor and part colors, legend highlighting, the simulation's phases, vertex dragging, the grid toggle and PNG export, the desktop and phone layouts, percentages with a wide font, and shareable links (round trip with an exact result, edited polygons, clipboard, invalid links, hash changes). The app runs as PaperScript, so the tests read its state through a small hook they append to `js/partitioning.js` when serving it. GitHub Actions runs the same tests on every pull request (`.github/workflows/tests.yml`).
+`tests/run.js` starts a small static server for the repository and runs 20 tests: exact areas for every shape, the circle through three points, Stop and `Esc`, GA settings (applied, remembered, reset), keyboard shortcuts, the distribution editor and part colors, legend highlighting, the simulation's phases, vertex dragging, the grid toggle and PNG export, the desktop and phone layouts, a one-line toolbar at every desktop width, percentages with a wide font, and shareable links (round trip with an exact result, edited polygons, clipboard, invalid links, hash changes). The app runs as PaperScript, so the tests read its state through a small hook they append to `js/partitioning.js` when serving it. GitHub Actions runs the same tests on every pull request (`.github/workflows/tests.yml`).
 
 ## Libraries
 
